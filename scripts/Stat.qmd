@@ -1,0 +1,628 @@
+---
+execute: 
+  echo: false
+  cache: true
+  warning: false
+author: Ly Amadou
+lang: fr
+# language: 
+title: Analyse des dynamiques territoriales et sectorielles de l'emploi salarié privé en France (2006–2025)
+date: today
+---
+
+### Contexte et problématique
+
+#### contexte économique
+
+L'emploi salarié constitue l'un des principaux indicateurs de la santé économique d'un territoire. Une augmentation du nombre de salariés peut refléter une croissance économique soutenue, une attractivité accrue pour les entreprises ou encore une transformation structurelle du tissu productif.
+
+Toutefois, lorsqu'une région crée des emplois, une question fondamentale se pose :
+
+> Cette croissance est-elle principalement due à la création de nouveaux établissements ou au développement des entreprises déjà présentes sur le territoire ?
+
+Cette distinction est essentielle pour les décideurs publics, les collectivités territoriales et les acteurs économiques.
+
+En effet :
+
+- si l'emploi augmente grâce à la création d'établissements, cela suggère une forte dynamique entrepreneuriale ;
+
+- si l'emploi augmente alors que le nombre d'établissements reste stable, cela signifie que les entreprises existantes grandissent et recrutent davantage.
+
+Ces deux mécanismes produisent une hausse de l'emploi mais traduisent des réalités économiques très différentes.
+
+### Objectif de l'étude
+
+L'objectif principal de cette étude est de comprendre les mécanismes qui expliquent l'évolution de l'emploi salarié privé en France entre 2006 et 2025 .
+
+Plus précisément, nous chercherons à répondre à la question suivante :
+
+> **La croissance de l'emploi salarié est-elle davantage portée par la création de nouveaux établissements ou par l'expansion des établissements déjà existants ?**
+
+Pour répondre à cette problématique, nous analyserons simultanément :
+
+- l'évolution du nombre d'établissements ;
+
+- l'évolution des effectifs salariés ;
+
+- les différences territoriales ;
+
+- les différences sectorielles ;
+
+- les ruptures économiques majeures (crise financière de 2008, pandémie de COVID-19, reprise économique).
+
+Après avoir présenté le contexte de l'étude ainsi que la problématique de recherche, il convient désormais d'examiner les données mobilisées afin d'en extraire les premières tendances significatives.
+
+Avant toute analyse, un travail de **préparation et de validation des données** a été réalisé afin de garantir la fiabilité des résultats. Cette étape préalable a permis de structurer les informations, de contrôler leur cohérence et de traiter les éventuelles anomalies susceptibles d'influencer les analyses statistiques. Les données ainsi obtenues constituent une base solide pour l'étude des dynamiques de l'emploi salarié privé en France.
+
+```{r}
+#| include: false
+library(ggtext)
+library(showtext)
+library(gt)
+
+font_add_google("Playfair Display", "playfair")
+font_add_google("Source Sans 3", "source")
+showtext_auto()
+```
+
+```{r}
+#| include: false
+# change the working directory to the project folder
+# setwd("c:/Full_stack/R_studio/projet_ml/projet2/DFGIP/")
+
+```
+
+```{r}
+# load the data
+data <- read.csv("data/df_clean.csv")[-1]
+# data
+```
+
+```{r}
+# load the necessary libraries
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(forecast)
+library(scales)
+```
+
+```{r}
+# head(data)
+```
+
+```{r}
+# colnames(data)
+```
+
+### Analyse exploratoire des données (EDA)
+
+**L'objectif** de cette première phase analytique n'est pas encore d'expliquer les mécanismes à l'origine des évolutions observées, mais de dresser un état des lieux du tissu économique français. Il s'agit notamment **d'identifier les secteurs les plus représentés**, les principaux pôles d'emploi, ainsi que les caractéristiques structurelles susceptibles d'éclairer la problématique centrale de cette étude.
+
+Cette analyse exploratoire permettra ainsi de faire émerger les premiers constats et d'orienter les investigations plus approfondies qui seront menées dans les sections suivantes.
+
+Avant d'étudier la répartition sectorielle ou territoriale de l'activité économique, il est nécessaire d'observer les grandes tendances nationales. Une première question s'impose alors :
+
+> Comment le nombre d'établissements employeurs et les effectifs salariés du secteur privé ont-ils évolué en France entre 2006 et 2025 ?
+
+L'analyse de ces deux indicateurs permet de mesurer simultanément la **dynamique** entrepreneuriale du pays et **l'évolution** de l'emploi salarié. L'étude conjointe de ces variables constitue une première étape essentielle pour comprendre les transformations du tissu économique français au cours des vingt dernières années.
+
+```{r}
+
+
+data |>
+  group_by(annee) |>
+  summarise(
+    etablissements = sum(nb_etablissements),
+    .groups = "drop"
+  ) |>
+  ggplot(aes(x = annee, y = etablissements)) +
+  geom_line(
+    linewidth = 1,
+    color = "#1F4E79"
+  ) +
+  geom_point(
+    size = 2,
+    color = "#111111"
+  ) +
+  scale_y_continuous(
+    labels = scales::label_number(
+      scale_cut = scales::cut_short_scale()
+    )
+  ) +
+  scale_x_continuous(
+    breaks = c(seq(2006, 2025, by = 3), 2025)
+  ) +
+  labs(
+    title = "Une dynamique des établissements marquée par une rupture après 2019",
+    subtitle = paste0(
+      "Entre <b>2006</b> et <b>2011</b>, le nombre d’établissements employeurs progresse modérément, ",
+      "avant d’entrer dans une phase de <b>stagnation puis de léger repli</b> jusqu’en 2018. ",
+      "À partir de <b>2019</b>, la trajectoire change nettement : le tissu économique connaît une forte hausse, ",
+      "atteignant un pic autour de 2022, avant un léger recul sur les dernières années observées."
+    ),
+    x = NULL,
+    y = "Nombre d’établissements",
+    caption = "Source : URSSAF — Données agrégées par année | Champ : secteur privé employeur"
+  ) +
+  theme_minimal(base_family = "source") +
+  theme(
+    plot.background = element_rect(fill = "#E1DDD2", color = NA),
+    panel.background = element_rect(fill = "#E1DDD2", color = NA),
+
+    panel.grid.major.x = element_line(color = "#000", linewidth = 0.25),
+    panel.grid.major.y = element_line(color = "#000", linewidth = 0.25),
+    panel.grid.minor = element_blank(),
+
+    plot.title = element_textbox_simple(
+      family = "playfair",
+      face = "bold",
+      size = 22,
+      color = "#111111",
+      lineheight = 1.05,
+      margin = margin(b = 13)
+    ),
+
+    plot.subtitle = element_textbox_simple(
+      family = "source",
+      size = 12,
+      color = "#3A3A3A",
+      lineheight = 1.35,
+      margin = margin(b = 18 , t=5)
+    ),
+
+    plot.caption = element_textbox_simple(
+      family = "source",
+      size = 9,
+      color = "#666666",
+      lineheight = 1.2,
+      margin = margin(t = 12)
+    ),
+
+    axis.title.y = element_text(
+      family = "source",
+      size = 10,
+      face = "bold",
+      color = "#222222",
+      margin = margin(r = 10)
+    ),
+
+    axis.text = element_text(
+      family = "source",
+      size = 9.5,
+      color = "#444444"
+    ),
+
+    axis.ticks = element_blank(),
+
+    plot.margin = margin(25, 30, 20, 30)
+  )
+```
+
+Le nombre d’établissements employeurs augmente globalement sur la période, mais cette progression n’est pas linéaire. Après une première phase de croissance entre 2006 et 2011, la dynamique ralentit puis recule légèrement jusqu’en 2018. La hausse observée à partir de 2019 constitue donc une rupture importante dans la trajectoire du tissu économique français.
+
+```{r}
+couleur_primaire  <- "#1B3A6B"   # bleu marine
+couleur_accent    <- "#E8472A"   # rouge brique
+couleur_fond      <- "#FAF8F2"   # fond crème
+couleur_grille    <- "#CCBBAA"   # grille douce
+couleur_texte     <- "#111111"
+couleur_secondaire <- "#444444"
+```
+
+```{r}
+data |>
+  group_by(annee) |>
+  summarise(
+    total_salaries = sum(effectifs_salaries),
+    .groups = "drop"
+  ) |> 
+  ggplot(aes(x = annee, y = total_salaries)) +
+  geom_line(
+    linewidth = 1,
+    color = "#111111"
+  ) +
+  geom_point(
+    size = 2,
+    color = "#111111"
+  ) +
+  scale_y_continuous(
+    labels = scales::label_number(
+      scale_cut = scales::cut_short_scale()
+    )
+  ) +
+  scale_x_continuous(
+    breaks = c(seq(2006, 2025, by = 3), 2025)
+  ) +
+  labs(
+    title = "Une progression de l’emploi salarié portée par une forte accélération récente",
+    subtitle = paste0(
+      "Entre <b>2006</b> et <b>2015</b>, les effectifs salariés évoluent de manière irrégulière, ",
+      "avec une phase de recul après 2008 puis une reprise progressive. ",
+      "À partir de <b>2016</b>, la dynamique devient nettement plus favorable, ",
+      "avant une forte accélération entre <b>2020</b> et <b>2022</b>. ",
+      "Depuis 2023, la croissance semble ralentir, avec un léger recul en fin de période."
+    ),
+    x = NULL,
+    y = "Effectifs salariés",
+    caption = "Source : URSSAF — Données agrégées par année | Champ : secteur privé employeur"
+  ) +
+  theme_minimal(base_family = "source") +
+  theme(
+    plot.background = element_rect(fill = "#FAF8F2", color = NA),
+    panel.background = element_rect(fill = "#FAF8F2", color = NA),
+
+    panel.grid.major.x = element_line(color = "#E1DDD2", linewidth = 0.25),
+    panel.grid.major.y = element_line(color = "#E1DDD2", linewidth = 0.25),
+    panel.grid.minor = element_blank(),
+
+    plot.title = element_textbox_simple(
+      family = "playfair",
+      face = "bold",
+      size = 22,
+      color = "#111111",
+      lineheight = 1.05,
+      margin = margin(b = 10)
+    ),
+
+    plot.subtitle = element_textbox_simple(
+      family = "source",
+      size = 12,
+      color = "#3A3A3A",
+      lineheight = 1.35,
+      margin = margin(b = 18 , t=10)
+    ),
+
+    plot.caption = element_textbox_simple(
+      family = "source",
+      size = 9,
+      color = "#666666",
+      lineheight = 1.2,
+      margin = margin(t = 12)
+    ),
+
+    axis.title.y = element_text(
+      family = "source",
+      size = 10,
+      face = "bold",
+      color = "#222222",
+      margin = margin(r = 10)
+    ),
+
+    axis.text = element_text(
+      family = "source",
+      size = 9.5,
+      color = "#444444"
+    ),
+
+    axis.ticks = element_blank(),
+
+    plot.margin = margin(25, 30, 20, 30)
+  )
+```
+
+Les effectifs salariés connaissent une trajectoire plus heurtée que le nombre d’établissements. Après une baisse visible autour de 2009, l’emploi salarié se stabilise jusqu’au milieu des années 2010. La dynamique change ensuite nettement à partir de 2016, avec une croissance continue qui s’accélère fortement après 2020. Le léger recul observé en fin de période suggère toutefois un ralentissement récent de cette progression.
+
+L'analyse conjointe du nombre d'établissements employeurs et des effectifs salariés met en évidence une transformation progressive du tissu économique français entre 2006 et 2025.
+
+Si les deux indicateurs affichent une tendance globalement haussière sur l'ensemble de la période, leur évolution n'est ni linéaire ni parfaitement synchronisée. Les années 2008 à 2015 sont marquées par une relative stagnation, voire un léger recul, tandis qu'une phase d'accélération apparaît nettement à partir de la seconde moitié des années 2010.
+
+Plus particulièrement, les effectifs salariés progressent plus rapidement que le nombre d'établissements. Cette divergence suggère que la croissance de l'emploi ne repose pas uniquement sur la création de nouvelles structures, mais également sur l'augmentation de la taille moyenne des établissements existants.
+
+Ces premiers résultats mettent en évidence un tissu économique globalement dynamique, caractérisé à la fois par une progression du nombre d'employeurs et par un renforcement de l'emploi salarié. Ils invitent désormais à s'intéresser à la structure de cette croissance afin d'identifier quels secteurs d'activité concentrent les établissements et les emplois en France.
+
+### Quels secteurs concentrent le plus d'établissements et d'emplois en France ?
+
+```{r}
+secteurs_resume <- data |>
+  group_by(grand_secteur_activite) |>
+  summarise(
+    total_salaries = sum(effectifs_salaries, na.rm = TRUE),
+    nb_total_etablissements = sum(nb_etablissements, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(
+    part_salaries = total_salaries / sum(total_salaries),
+    part_etablissements = nb_total_etablissements / sum(nb_total_etablissements)
+  ) |>
+  arrange(desc(total_salaries))
+```
+
+```{r}
+
+
+secteurs_resume |>
+  arrange(desc(total_salaries)) |>
+  mutate(
+    rang = row_number(),
+    # Ratio densité salariale
+    ratio_sal_etab = total_salaries / nb_total_etablissements,
+    # Formats affichés
+    part_salaries_fmt = percent(part_salaries, accuracy = 0.1),
+    part_etablissements_fmt = percent(part_etablissements, accuracy = 0.1),
+    total_salaries_fmt = label_number(big.mark = "\u202f", scale_cut = cut_short_scale())(total_salaries),
+    nb_total_etablissements_fmt = label_number(big.mark = "\u202f", scale_cut = cut_short_scale())(nb_total_etablissements),
+    # Écart part salariés - part établissements (surpoids emploi)
+    ecart = (part_salaries - part_etablissements)*100
+  ) |>
+  # On garde les colonnes brutes pour data_color + nanoplot
+  gt(rowname_col = "rang") |>
+
+  # ── Colonnes cachées (brutes, utilisées pour calculs visuels) ─────────────
+  cols_hide(c(part_salaries, part_etablissements, total_salaries,
+              nb_total_etablissements, ratio_sal_etab)) |>
+
+  # ── Labels ────────────────────────────────────────────────────────────────
+  cols_label(
+    rang                        = "",
+    grand_secteur_activite      = "Grand secteur d'activité",
+    total_salaries_fmt          = "Effectifs salariés",
+    nb_total_etablissements_fmt = "Établissements",
+    part_salaries_fmt           = "Part salariés",
+    part_etablissements_fmt     = "Part étab.",
+    ecart                       = "Écart emploi / étab."
+  ) |>
+  tab_stubhead(label = "#") |>
+
+  # ── Spanners ──────────────────────────────────────────────────────────────
+  tab_spanner(
+    label   = md("**Volumes**"),
+    columns = c(total_salaries_fmt, nb_total_etablissements_fmt)
+  ) |>
+  tab_spanner(
+    label   = md("**Poids relatifs**"),
+    columns = c(part_salaries_fmt, part_etablissements_fmt, ecart)
+  ) |>
+
+  # ── Colonne écart : formatage + barre colorée ─────────────────────────────
+  fmt_number(columns = ecart, decimals = 1, suffixing  = " pts") |>
+  data_color(
+    columns = ecart,
+    method  = "numeric",
+    palette = c("#C0392B", "#FAF8F2", "#1A5276"),
+    domain  = c(-0.15, 0.15),
+    na_color = "#FAF8F2"
+  ) |> fmt(
+  columns = ecart,
+  fns = function(x) {
+    paste0(
+      ifelse(x > 0, "+", ""),
+      scales::number(x, accuracy = 0.1, decimal.mark = ","),
+      " pts"
+    )
+  }
+) |> 
+
+  # ── En-tête ───────────────────────────────────────────────────────────────
+  tab_header(
+    title    = md("**Répartition sectorielle des établissements et des effectifs salariés**"),
+    subtitle = md("Les services marchands dominent le tissu économique français, tandis que l'industrie pèse davantage en emploi qu'en nombre d'établissements.")
+  ) |>
+
+  # ── Notes de bas ─────────────────────────────────────────────────────────
+  tab_source_note(
+    source_note = md("**Lecture :** les pourcentages correspondent au poids cumulé de chaque secteur sur l'ensemble de la période observée. L'écart (en points) mesure la différence entre la part des salariés et la part des établissements — positif = secteur dense en emploi.")
+  ) |>
+  tab_source_note(
+    source_note = md("**Source :** URSSAF — secteur privé employeur, France entière, période 2006–2025.")
+  ) |>
+  tab_footnote(
+    footnote  = md("Secteur le plus représenté en nombre d'établissements **et** en emploi."),
+    locations = cells_body(
+      columns = grand_secteur_activite,
+      rows    = grand_secteur_activite == "GS5 Autres services marchands hors intérim"
+    )
+  ) |>
+  tab_footnote(
+    footnote  = md("Secteur dont le poids en emploi dépasse nettement le poids en établissements."),
+    locations = cells_body(
+      columns = grand_secteur_activite,
+      rows    = grand_secteur_activite == "GS1 Industrie"
+    )
+  ) |>
+
+  # ── Alignements ───────────────────────────────────────────────────────────
+  cols_align(align = "center", columns = rang) |>
+  cols_align(align = "left",   columns = grand_secteur_activite) |>
+  cols_align(align = "right",  columns = c(total_salaries_fmt, nb_total_etablissements_fmt)) |>
+  cols_align(align = "center", columns = c(part_salaries_fmt, part_etablissements_fmt, ecart)) |>
+
+  # ── Largeurs ──────────────────────────────────────────────────────────────
+  cols_width(
+    rang                        ~ px(35),
+    grand_secteur_activite      ~ px(280),
+    total_salaries_fmt          ~ px(120),
+    nb_total_etablissements_fmt ~ px(110),
+    part_salaries_fmt           ~ px(100),
+    part_etablissements_fmt     ~ px(90),
+    ecart                       ~ px(110)
+  ) |>
+
+  # ── Styles conditionnels ──────────────────────────────────────────────────
+  # En-têtes colonnes
+  tab_style(
+    style = list(
+      cell_text(weight = "bold", color = "#111111", size = px(13)),
+      cell_fill(color = "#F2EFE6")
+    ),
+    locations = list(
+      cells_column_labels(everything()),
+      cells_column_spanners(everything()),
+      cells_stubhead()
+    )
+  ) |>
+  # Services marchands (1er)
+  tab_style(
+    style = list(
+      cell_text(weight = "bold", color = "#1F4E79"),
+      cell_fill(color = "#EAF2F8")
+    ),
+    locations = cells_body(
+      rows = grand_secteur_activite == "GS5 Autres services marchands hors intérim"
+    )
+  ) |>
+  # Industrie
+  tab_style(
+    style = list(
+      cell_text(weight = "bold", color = "#7A3E00"),
+      cell_fill(color = "#FFF3E0")
+    ),
+    locations = cells_body(
+      rows = grand_secteur_activite == "GS1 Industrie"
+    )
+  ) |>
+  # Rang 1 : fond doré discret
+  tab_style(
+    style = cell_fill(color = "#FDF6DC"),
+    locations = cells_stub(rows = rang == 1)
+  ) |>
+  # Ligne de séparation fine entre les rangs
+  tab_style(
+    style     = cell_borders(sides = "bottom", color = "#E0D9CC", weight = px(1)),
+    locations = cells_body(rows = everything())
+  ) |>
+  # Titre blanc sur fond foncé
+  tab_style(
+    style     = cell_text(color = "#1A1A1A", weight = "bold"),
+    locations = cells_title(groups = "title")
+  ) |>
+  tab_style(
+    style     = cell_text(color = "#444444", style = "italic"),
+    locations = cells_title(groups = "subtitle")
+  ) |>
+
+  # ── Options globales ──────────────────────────────────────────────────────
+  opt_row_striping() |>
+  tab_options(
+    table.background.color              = "#FAF8F2",
+    heading.background.color            = "#FAF8F2",
+    heading.border.bottom.color         = "#CCBBAA",
+    heading.border.bottom.width         = px(1),
+    column_labels.background.color      = "#F2EFE6",
+    table.font.names                    = "Source Sans Pro",
+    heading.title.font.size             = px(20),
+    heading.subtitle.font.size          = px(13),
+    heading.padding                     = px(14),
+    data_row.padding                    = px(9),
+    stub.background.color               = "#F7F4EC",
+    stub.border.style                   = "solid",
+    stub.border.color                   = "#DDD5C4",
+    stub.border.width                   = px(1),
+    row.striping.background_color       = "#F2EDE0",
+    table.border.top.color              = "#111111",
+    table.border.top.width              = px(2),
+    table.border.bottom.color           = "#111111",
+    table.border.bottom.width           = px(2),
+    column_labels.border.top.color      = "#CCBBAA",
+    column_labels.border.top.width      = px(1),
+    column_labels.border.bottom.color   = "#111111",
+    column_labels.border.bottom.width   = px(1.5),
+    source_notes.background.color       = "#F2EFE6",
+    source_notes.border.lr.style        = "none",
+    source_notes.font.size              = px(11),
+    source_notes.padding                = px(8),
+    footnotes.font.size                 = px(11),
+    footnotes.padding                   = px(6),
+    table.width                         = pct(100)
+  )
+```
+
+Les services marchands hors intérim constituent le premier secteur économique français, concentrant à eux seuls près de 40 % des établissements et plus de 36 % des emplois salariés. Le commerce occupe également une place importante avec près de 22 % des établissements et 17 % des salariés. À l'inverse, l'industrie représente moins de 8 % des établissements mais plus de 17 % des emplois, soulignant son fort poids économique malgré un nombre relativement limité de structures.
+
+### Les secteurs présentent-ils le même poids en établissements et en emploi ?
+
+#### 1. Les services marchands dominent largement l'économie française
+
+Le secteur **GS5 – Autres services marchands hors intérim** concentre à lui seul :
+
+- **36,1 % des salariés**
+
+- **39,3 % des établissements**
+
+Il constitue donc le principal moteur de l'économie française, tant en termes d'emploi que de nombre d'entreprises. Plus d'un établissement sur trois appartient à ce secteur, qui regroupe notamment les activités de conseil, les services aux entreprises, les activités financières, immobilières et diverses prestations de services.
+
+#### 2. L'industrie emploie beaucoup avec peu d'établissements
+
+L'industrie représente :
+
+- **17,2 % des salariés**
+
+- seulement **7,8 % des établissements**
+
+Cette différence est particulièrement révélatrice.
+
+L'industrie compte relativement peu d'établissements mais génère un volume d'emplois comparable à celui du commerce.
+
+Cela suggère une **taille moyenne des établissements beaucoup plus élevée** que dans les autres secteurs.
+
+Autrement dit :
+
+> Les établissements industriels sont moins nombreux mais emploient davantage de salariés.
+
+#### 3. Le commerce repose sur un maillage territorial dense
+
+Le commerce représente :
+
+- **17,3 % des salariés**
+
+- **21,9 % des établissements**
+
+Le secteur dispose d'un très grand nombre d'établissements répartis sur l'ensemble du territoire.
+
+Cependant, sa part dans l'emploi reste inférieure à sa part dans les établissements, ce qui traduit une présence importante de petites structures :
+
+- commerces de proximité,
+
+- commerces spécialisés,
+
+- petites enseignes indépendantes.
+
+#### 4. L'hôtellerie-restauration est composée majoritairement de petites structures
+
+Le secteur représente :
+
+- **9,3 % des établissements**
+
+- seulement **5,8 % des salariés**
+
+Cette situation traduit généralement une prédominance de :
+
+- restaurants indépendants,
+
+- cafés,
+
+- hôtels familiaux,
+
+- petites structures de services.
+
+Le nombre moyen de salariés par établissement y est donc relativement faible.
+
+#### 5. Les services non marchands sont fortement employeurs
+
+Les services non marchands concentrent :
+
+- **12,5 % des salariés**
+
+- **8,7 % des établissements**
+
+Ce secteur regroupe notamment :
+
+- santé,
+
+- éducation,
+
+- action sociale,
+
+- administrations et organismes assimilés.
+
+La part de l'emploi est nettement supérieure à celle des établissements, ce qui reflète des structures souvent de grande taille.
+
+::: {.callout-important appearance="minimal"}
+## insights clé
+:::
+
+Le nombre d'établissements ne reflète pas nécessairement le poids économique d'un secteur.
+
+L'industrie et les services non marchands emploient une proportion importante de salariés malgré un nombre limité d'établissements, tandis que le commerce ou l'hôtellerie-restauration reposent sur un tissu dense de petites structures.
+
+Cette première analyse met ainsi en évidence une forte hétérogénéité dans la taille moyenne des établissements selon les secteurs d'activité.

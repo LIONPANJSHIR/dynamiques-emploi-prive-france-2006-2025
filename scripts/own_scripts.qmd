@@ -1,0 +1,613 @@
+---
+title: "own_scripts"
+format: html
+editor: visual
+execute: 
+  cache: true
+  include: false 
+---
+
+```{r}
+## Chargement des données
+library(readr)
+data <- read_csv("C:/Full_stack/R_studio/projet_ml/dynamiques-emploi-prive-france-2006-2025/data/processed/df_clean.csv")[-1] 
+
+data <- data |> filter(
+ grand_secteur_activite != "nca _non classé ailleurs_"
+)
+```
+
+```{r}
+#| include: false
+### Chargement des paquets
+library(tidyverse)
+library(scales)
+library(treemapify)
+library(ggtext)
+library(showtext)
+library(sysfonts)
+library(viridis)
+library(gghighlight)
+library(dplyr)
+library(gt)
+library(glue)
+library(stringi)
+library(ggplot2)
+
+
+font_add_google("Playfair Display", "playfair")
+font_add_google("Source Sans 3", "source")
+showtext_auto()
+title_family <- "playfair"
+body_family  <- "source"
+
+
+bg        <-  "#FFFFFF"
+title     <-  "#003049"
+subtitle  <-  "#475569"
+body      <-  "#2B2B2B"
+accent    <-  "#0077B6"
+success   <-  "#059669"
+warning   <-  "#D97706"
+danger    <-  "#DC2626"
+```
+
+# 
+
+```{r}
+# rm(theme)
+```
+
+```{r}
+theme_custom <-
+ theme_minimal(base_size = 12 , base_family = body_family )+
+ theme(
+  # Panel
+  panel.background = element_rect(fill=bg , colour = NULL) ,
+  plot.background = element_blank(),
+
+  # Grid
+  panel.grid.major = element_line(
+   linewidth = 0.075
+  ),
+  panel.grid.minor = element_blank(),
+  panel.grid.major.x = element_line(
+   colour = "#E5E7EB",
+   linewidth = 0.03 ,
+   linetype ="dashed"
+  ),
+  panel.grid.major.y = element_line(
+   colour = "#CBD5E1",
+   linewidth = 0.03 ,
+   linetype = "dashed"
+  ),
+
+  # Titres
+  plot.title = element_textbox_simple(
+   family = title_family ,
+   size=22 ,
+   colour = title ,
+   hjust = 0 ,
+   margin = margin(b=5, t=3)) ,
+  plot.title.position = "plot" ,
+
+  # Sous-titre
+  plot.subtitle  = element_textbox_simple(
+   size=17 ,
+   colour = title ,
+   hjust = 0 ,
+   margin = margin(b=10 , t=5)) ,
+
+  #caption
+  plot.caption =  element_textbox_simple(
+   size=14 ,
+   colour = title ,
+   hjust = 0 ,
+   margin = margin(b=3 , t=6)) ,
+  plot.caption.position = "plot",
+
+  # Legend
+  legend.position = "right",
+  legend.background = element_rect(fill = NA, colour = NA),
+  legend.text = element_text(
+   family = "source",
+   face = "bold",
+   size = 8.5,
+   colour = body
+  ),
+  legend.title = element_text(
+   family = "playfair",
+   face = "bold",
+   size = 10.5,
+   colour = body
+  )
+ )
+```
+
+# Vue d'ensemble nationale
+
+### Combien d'établissements et de salariés sont observés ?
+
+```{r}
+data |> 
+ summarize(`Total établissement` = sum(nb_etablissements) ,
+           `Total des salariés` = sum(effectifs_salaries)) |> 
+ mutate(`Total établissement` = label_number(scale_cut = cut_short_scale())(`Total établissement`),
+        `Total des salariés` = label_number(scale_cut = cut_short_scale())(`Total des salariés`) )
+```
+
+- On comptabilise 36 millions d'établissements avec un total de 369 millions de salariés depuis 2006
+
+### Comment se répartissent les salariés par secteur ?
+
+```{r}
+treemap_data <- data |>  group_by(grand_secteur_activite) |> 
+ summarise(
+  total_etab = sum(nb_etablissements) , 
+  total_eff = sum(effectifs_salaries),
+  .groups = "drop"
+ ) |> 
+ mutate(
+  eff_rate =  total_etab / sum(total_etab) , 
+  etab_rate = total_eff / sum(total_eff)
+ ) |> 
+ select(grand_secteur_activite,eff_rate , total_eff , etab_rate , total_etab) 
+ 
+treemap_data |> arrange(desc(eff_rate)) |>
+ mutate(
+  across(c(total_eff , total_etab),~label_number(scale_cut = cut_short_scale())(.x)) ,
+  across(c(eff_rate , etab_rate) , ~label_percent(scale = 100)(.x)))
+```
+
+```{r}
+
+
+# Préparation des données
+data_diff_sec <- data |>
+  group_by(grand_secteur_activite) |>
+  summarise(
+    total_etablissements = sum(nb_etablissements, na.rm = TRUE),
+    total_salaries = sum(effectifs_salaries, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(
+    part_etab = total_etablissements / sum(total_etablissements),
+    part_sal = total_salaries / sum(total_salaries),
+    ratio_sal_etab = total_salaries / total_etablissements,
+    label = glue(
+      "{grand_secteur_activite}\n",
+      "Étab. : {percent(part_etab, accuracy = 0.1)}\n",
+      "Sal. : {percent(part_sal, accuracy = 0.1)}"
+    )
+  )
+
+# Treemap
+p_treemap <- ggplot(
+  data_diff_sec,
+  aes(
+    area = total_salaries,
+    fill = ratio_sal_etab,
+    label = label
+  )
+) +
+  geom_treemap(color = "white", size  = 1.2) +
+  geom_treemap_text(
+    color = "white",
+    place = "centre",
+    grow = TRUE,
+    reflow = TRUE,
+    min.size = 8,
+    fontface = "bold"
+  ) +
+   ggsci::scale_fill_tw3("amber")+
+  labs(
+    title = "Structure sectorielle de l’emploi salarié privé en France",
+    subtitle = "La taille des blocs représente le volume total de salariés, la couleur indique le nombre moyen de salariés par établissement",
+    caption = "Données : URSSAF | Réalisation : Ly Amadou"
+  ) +
+  theme_custom+
+  theme(
+    panel.grid = element_blank())
+
+p_treemap
+ 
+```
+
+- Le paysage de l'emploi privé français est largement dominé par les GS5 (*Autres services marchands hors intérim*). Avec près de 40 % des établissements et plus d'un tiers des salariés du secteur privé, ce groupe constitue le principal moteur de l'emploi en France.
+
+- Le commerce (GS3) occupe également une place centrale, regroupant 17,3 % des salariés. À eux deux, ces secteurs concentrent plus de la moitié de l'emploi salarié privé.
+
+- Toutefois, le nombre d'établissements ne reflète pas toujours le poids économique d'un secteur. L'industrie en est une bonne illustration : malgré un tissu d'établissements plus restreint, elle emploie davantage de salariés que plusieurs secteurs disposant d'un plus grand nombre d'entreprises. Les établissements industriels sont donc, en moyenne, de plus grande taille et plus intensifs en main-d'œuvre.
+
+```{r}
+
+
+ggsave(
+  filename = paste("C:/Full_stack/R_studio/projet_ml/dynamiques-emploi-prive-france-2006-2025/figures/treemap_secteurs_emploi.png"),
+  plot = p_treemap,
+  width = ,
+  height = 3,
+  dpi = 300
+)
+```
+
+### La structure des salariés est-elle différente de celle des établissements ?
+
+```{r}
+plot_dumbbell <- data_diff_sec |>
+ mutate(
+  ecart = round(part_sal - part_etab,2),
+  secteur = reorder(grand_secteur_activite, ecart),
+  
+  label_ecart = case_when(
+   ecart > 0 ~ paste0("+", percent(ecart, accuracy = 0.1)),
+   TRUE ~ percent(ecart, accuracy = 0.1)
+  ),
+  
+  profil = case_when(
+   ecart > 0 ~ "Surreprésentation des salariés",
+   ecart < 0 ~ "Surreprésentation des établissements",
+   TRUE ~ "Équilibre"
+  ),
+  
+  x_label = (part_etab + part_sal) / 2,
+  
+  # Positions intelligentes des labels
+  x_etab = case_when(
+   ecart > 0 ~ part_etab - 0.015,
+   TRUE ~ pmax(part_etab, part_sal) + 0.015
+  ),
+  
+  hjust_etab = case_when(
+   ecart > 0 ~ 1,
+   TRUE ~ 0
+  ),
+  
+  x_sal = case_when(
+   ecart > 0 ~ part_sal + 0.015,
+   TRUE ~ pmin(part_etab, part_sal) - 0.015
+  ),
+  
+  hjust_sal = case_when(
+   ecart > 0 ~ 0,
+   TRUE ~ 1
+  )
+ )
+
+dumbbell_plot_rep_etab_sal <-  ggplot(plot_dumbbell) +
+ 
+ # Segment
+ geom_segment(
+  aes(
+   x = part_etab,
+   xend = part_sal,
+   y = secteur,
+   yend = secteur,
+   colour = profil
+  ),
+  linewidth = 1.8,
+  alpha = .8,
+  arrow = arrow(
+   type = "closed",
+   length = unit(.08, "cm")
+  )
+ ) +
+ 
+ # Point établissements
+ geom_point(
+  aes(
+   x = part_etab,
+   y = secteur
+  ),
+  colour = "grey35",
+  size = 1.8
+ ) +
+ 
+ # Point salariés
+ geom_point(
+  aes(
+   x = part_sal,
+   y = secteur,
+   colour = profil
+  ),
+  size = 1.8
+ ) +
+ 
+ # Label écart
+ geom_label(
+  aes(
+   x = x_label,
+   y = secteur,
+   label = label_ecart,
+   fill = profil
+  ),
+  size = 3.1,
+  fontface = "bold",
+  colour = "white",
+  linewidth = 0,
+  alpha = .95
+ ) +
+ 
+ # Valeur établissements
+ geom_text(
+  aes(
+   x = x_etab,
+   y = secteur,
+   label = percent(part_etab, accuracy = .1),
+   hjust = hjust_etab
+  ),
+  colour = "grey35",
+  size = 3.2,
+  fontface = "bold"
+ ) +
+ 
+ # Valeur salariés
+ geom_text(
+  aes(
+   x = x_sal,
+   y = secteur,
+   label = percent(part_sal, accuracy = .1),
+   hjust = hjust_sal
+  ),
+  colour = "grey20",
+  size = 3.2,
+  fontface = "bold"
+ ) +
+ 
+ scale_x_continuous(
+  labels = percent_format(accuracy = 1),
+  limits = c(0, 0.43),
+  breaks = seq(0, 0.40, 0.10),
+  expand = expansion(mult = c(.02, .04))
+ ) +
+ 
+ scale_colour_manual(
+  values = c(
+   "Surreprésentation des salariés" = "#D55E00",
+   "Surreprésentation des établissements" = "#0072B2",
+   "Équilibre" = "grey60"
+  )
+ ) +
+ 
+ scale_fill_manual(
+  values = c(
+   "Surreprésentation des salariés" = "#D55E00",
+   "Surreprésentation des établissements" = "#0072B2",
+   "Équilibre" = "grey60"
+  )
+ ) +
+ 
+  labs(
+   title = "Davantage d’établissements ne signifie pas toujours davantage de salariés",
+   subtitle = "L’<b>industrie</b> et les <b>services non marchands</b> concentrent une part de salariés supérieure à leur poids en établissements, tandis que le <b>commerce</b>, la <b>construction</b> et l’<b>hôtellerie-restauration</b> reposent sur un tissu plus fragmenté.",
+   x = "Part dans le total national",
+  y = NULL,
+  colour = NULL,
+  fill = NULL,
+  caption = "Point gris : part des établissements • Point coloré : part des salariés • Label central : écart entre les deux structures."
+ ) +
+ 
+ theme_custom +
+ theme(
+  legend.position = "top",
+  panel.grid.major.y = element_blank(),
+  panel.grid.minor = element_blank(),
+  panel.border = element_rect(
+   colour = "grey75",
+   fill = NA,
+   linewidth = .25
+  )
+ )
+
+
+dumbbell_plot_rep_etab_sal
+
+
+ggsave(
+ "C:/Full_stack/R_studio/projet_ml/dynamiques-emploi-prive-france-2006-2025/figures/dumbbell_plot_rep_etab_sal.png",
+ dumbbell_plot_rep_etab_sal ,
+ width =10 ,
+ height = 6 ,
+ dpi = 360
+)
+
+```
+
+L’<b>industrie</b> et les <b>services non marchands</b> concentrent une part de salariés supérieure à leur poids en établissements, tandis que le <b>commerce</b>, la <b>construction</b> et l’<b>hôtellerie-restauration</b> reposent sur un tissu plus fragmenté.
+
+# 
+
+### Comment évolue l'emploi par secteur depuis 2006 ?
+
+```{r}
+ data |>
+  filter(grand_secteur_activite != "nca _non classé ailleurs_") |>
+ group_by(annee, grand_secteur_activite) |>
+ summarise(
+  # total_etab = sum(nb_etablissements, na.rm = TRUE),
+  total_sal = sum(effectifs_salaries, na.rm = TRUE),
+  .groups = "drop"
+ ) |>
+  group_by(annee) |>
+  mutate(part_sal = total_sal / sum(total_sal)) |>
+  ungroup() |>
+  ggplot(aes(x=annee , y = total_sal , colour = grand_secteur_activite))+
+  geom_line()+
+  gghighlight::gghighlight(label_key = grand_secteur_activite ,
+                           use_direct_label = FALSE)+
+  # geom_point()+
+  facet_wrap(~grand_secteur_activite , nrow = 2)+
+  labs(title="<b>Evolution</b> de la part des salariés par grand secteur privé",
+       subtitle = "Répartition annuelle des effectifs salariés entre 2006 et 2025",
+       x= NULL ,
+       y ="Part des salariés")+
+  # scale_y_continuous(labels = scales::label_percent(accuracy  = 1))+
+  scale_y_continuous(labels = scales::label_number(scale_cut = scales::cut_short_scale()))+
+  guides(colour="none")+
+  theme_custom
+
+```
+
+```{r}
+source_note <- md(
+ "**Données** : URSSAF <br>
+   **Auteur** : Ly Amadou <br>
+   **Outils** : R, dplyr, tidyr, gt"
+)
+
+subtitle_sector_growth <- md(
+ "Entre <b>2006 et 2025</b>, la croissance de l’emploi salarié privé est principalement portée par les 
+  <b>services</b>. L’<b>hôtellerie-restauration</b> affiche la plus forte croissance relative, 
+  tandis que les <b>autres services marchands hors intérim</b> concentrent le plus grand volume 
+  d’emplois créés. À l’inverse, l’<b>industrie</b> et l’<b>intérim</b> enregistrent un recul net."
+)
+
+table_sector_growth_gt <- data |> 
+ filter(
+  annee %in% c(2006, 2025),
+  grand_secteur_activite != "nca _non classé ailleurs_"
+ ) |> 
+ group_by(annee, grand_secteur_activite) |> 
+ summarize(
+  total_sal = sum(effectifs_salaries, na.rm = TRUE),
+  .groups = "drop"
+ ) |> 
+ pivot_wider(
+  names_from = annee,
+  values_from = total_sal,
+  names_prefix = "sal_"
+ ) |>
+ mutate(
+  gain_sal = sal_2025 - sal_2006,
+  evolution_pct = 100 * (sal_2025 - sal_2006) / sal_2006,
+  lecture = case_when(
+   evolution_pct >= 40 ~ "Croissance exceptionnelle",
+   evolution_pct >= 25 ~ "Très forte dynamique",
+   evolution_pct >= 10 ~ "Croissance solide",
+   evolution_pct >= 0  ~ "Progression faible",
+   TRUE ~ "Recul de l’emploi"
+  )
+ ) |> 
+ arrange(desc(gain_sal)) |>
+ mutate(rang = row_number()) |>
+ select(
+  rang,
+  grand_secteur_activite,
+  sal_2006,
+  sal_2025,
+  gain_sal,
+  evolution_pct,
+  lecture
+ ) |>
+ gt(rowname_col = "rang") |>
+ tab_header(
+  title = md("**Les services portent la croissance de l’emploi salarié privé**"),
+  subtitle = subtitle_sector_growth
+ ) |>
+ tab_source_note(source_note = source_note) |>
+ cols_label(
+  grand_secteur_activite = "Grand secteur d’activité",
+  sal_2006 = "Salariés 2006",
+  sal_2025 = "Salariés 2025",
+  gain_sal = "Gain net",
+  evolution_pct = "Évolution",
+  lecture = "Lecture"
+ ) |>
+ fmt_number(
+  columns = c(sal_2006, sal_2025, gain_sal),
+  decimals = 0,
+  suffixing = TRUE
+ ) |>
+ fmt_number(
+  columns = evolution_pct,
+  decimals = 1
+ ) |>
+ text_transform(
+  locations = cells_body(columns = evolution_pct),
+  fn = function(x) paste0(x, " %")
+ ) |>
+ data_color(
+  columns = evolution_pct,
+  palette = c("#B23A48", "#F6E8C3", "#D9A441", "#C97B2B", "#0B1F33")
+ ) |>
+ data_color(
+  columns = gain_sal,
+  palette = c("#B23A48", "#EFEFEF", "#7FB3D5", "#21618C")
+ ) |>
+ tab_style(
+  locations = cells_body(columns = grand_secteur_activite),
+  style = cell_text(
+   weight = "bold",
+   color = "#0B1F33"
+  )
+ ) |>
+ tab_style(
+  locations = cells_body(
+   columns = lecture,
+   rows = lecture == "Croissance exceptionnelle"
+  ),
+  style = list(
+   cell_fill(color = "#0B1F33"),
+   cell_text(color = "white", weight = "bold")
+  )
+ ) |>
+ tab_style(
+  locations = cells_body(
+   columns = lecture,
+   rows = lecture == "Très forte dynamique"
+  ),
+  style = list(
+   cell_fill(color = "#8C2F39"),
+   cell_text(color = "white", weight = "bold")
+  )
+ ) |>
+ tab_style(
+  locations = cells_body(
+   columns = lecture,
+   rows = lecture == "Recul de l’emploi"
+  ),
+  style = list(
+   cell_fill(color = "#B23A48"),
+   cell_text(color = "white", weight = "bold")
+  )
+ ) |>
+ tab_style(
+  locations = cells_title(groups = "title"),
+  style = cell_text(
+   font = google_font("Playfair Display"),
+   size = px(24),
+   weight = "bold",
+   color = "#0B1F33"
+  )
+ ) |>
+ tab_style(
+  locations = cells_title(groups = "subtitle"),
+  style = cell_text(
+   font = google_font("Source Sans 3"),
+   size = px(13),
+   color = "#4A4A4A"
+  )
+ ) |>
+ tab_style(
+  locations = cells_column_labels(everything()),
+  style = cell_text(
+   font = google_font("Source Sans 3"),
+   weight = "bold",
+   color = "#0B1F33"
+  )
+ ) |>
+ tab_options(
+  table.font.names = "Source Sans 3",
+  table.background.color = "#F7F3EA",
+  heading.background.color = "#F7F3EA",
+  column_labels.background.color = "#EFE6D8",
+  data_row.padding = px(7),
+  table.width = pct(100),
+  row.striping.include_table_body = TRUE,
+  row.striping.background_color = "#FBF8F1"
+ )
+
+table_sector_growth_gt
+```
+
+Les résultats révèlent une transformation progressive de la structure de l'emploi salarié français. Alors que l'industrie perd plus de 365 000 emplois et que l'intérim recule fortement, les créations d'emplois se concentrent dans les activités de services. Les autres services marchands hors intérim représentent à eux seuls plus d'un million d'emplois supplémentaires, tandis que les services non marchands et l'hôtellerie-restauration affichent également une croissance soutenue. Ces évolutions témoignent d'une tertiarisation croissante de l'économie française au cours des deux dernières décennies.

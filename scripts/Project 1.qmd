@@ -1,0 +1,1363 @@
+---
+title: "Analyse des dynamiques territoriales et sectorielles de l'emploi salarié privé en France (2006–2025)"
+author: Ly Amadou
+format: html
+editor: visual
+execute: 
+  cache: true
+---
+
+```{r}
+library(tidyverse)
+library(scales)
+library(ggtext)
+library(showtext)
+library(sysfonts)
+library(viridis)
+library(gghighlight)
+library(dplyr)
+library(gt)
+library(stringi)
+library(ggplot2)
+
+```
+
+```{r}
+library(readr)
+data <- read_csv("C:/Full_stack/R_studio/projet_ml/dynamiques-emploi-prive-france-2006-2025/data/processed/df_clean.csv")[-1]
+```
+
+```{r}
+colnames(data)
+```
+
+```{r}
+data |> 
+ count(departement) |> 
+ slice_max(order_by =n ,n=10)
+## On as 100 départements dans notre base de donné 
+```
+
+```{r}
+data |> 
+ count(region) |> 
+ arrange(desc(n))
+
+## 17 région dans la BD
+```
+
+### Combien d'établissement avons nous comptabiliser ?
+
+On comptabilise 36 millions d'établissement depuis 2006
+
+```{r}
+data |> 
+ summarise(Total_etabl = sum(nb_etablissements)) |> 
+ mutate(Total_etabl = label_number(big.mark = " ",scale_cut = cut_long_scale())(Total_etabl) )
+```
+
+Quel année le nombre d'établissement la France a étais a son maximum par rapport aux autres années ainsi que les effectifs salarié ont exploser
+
+- En 2024 le nombre d'établissement en France a explosé plus de 1.90 Millions d'établissement sont enregistrés vs 1.73 en 2006
+- en 2024 l'effectifs des salariés ont éteint des records jamais enregistré auparavant + 20.03 millions de salariés de salariés vs 17.78 million en 2006
+
+```{r}
+Total_etab_eff <- data |> 
+ group_by(annee) |> 
+ summarise(Total_etab = sum(nb_etablissements) ,
+           Total_eff = sum(effectifs_salaries)) |> 
+ mutate(
+  Total_etab = label_number(accuracy = 0.01,scale_cut = cut_long_scale())(Total_etab),
+  Total_eff = label_number(accuracy = 0.01,big.mark = " ",scale_cut = cut_long_scale())(Total_eff)
+  
+ )
+
+Total_etab_eff |> 
+ arrange(desc(Total_eff))
+```
+
+### Quels secteurs comptabilise le plus d'établissement ?
+
+- 73.28 % des établissements sont contrôlé par GS5 (**Services marchands hors intérim**), GS3(**Commerces)** et le GS2 (**Construction**) dont 39.30 % sont issu des GS5
+- +75% des salariés travaillent dans les secteurs GS5 (**Services marchands hors intérim**) ,GS3(**Commerces**) , GS1(**Industrie**)
+  - **+1 salariés sur 3** travaille dans le secteur GS5 (**Services marchands hors intérim**)
+
+Nous pouvons constaté que le fait d'avoir plus d'établissement n'implique pas forcement la possession de plusieurs salariés par exemple :
+
+- Le secteur de **hôtellerie** englobe **9.30%** des établissements français contrairement au secteur de l'**industrie** qui ne détienne que **7.9%** des établissements mais qui cependant possèdent **+11.43%** de salariés comparé au secteur de l'**hôtelerie**
+
+```{r}
+Secteurs_etab_eff <- data |> 
+ group_by(grand_secteur_activite) |> 
+ summarise(total_etab = sum(nb_etablissements) , 
+           total_eff = sum(effectifs_salaries))
+
+Secteurs_etab_eff |> 
+ mutate(prop_eff = total_eff / sum(total_eff) ,
+        prop_etab = total_etab / sum(total_etab)) |> 
+ arrange(desc(total_etab)) |> 
+ mutate(
+  total_etab = label_number(accuracy = 0.01,scale_cut = cut_long_scale())(total_etab),
+  total_eff = label_number(accuracy = 0.01,big.mark = " ",scale_cut = cut_long_scale())(total_eff) ,
+  prop_eff = percent_format(accuracy = 0.01)(prop_eff),
+  prop_etab = percent_format(accuracy = 0.01)(prop_etab)
+  
+ )
+
+
+Secteurs_etab_eff |> 
+ mutate(prop_eff = total_eff / sum(total_eff) ,
+        prop_etab = total_etab / sum(total_etab)) |>
+ arrange(desc(total_eff)) |> 
+ mutate(
+  total_etab = label_number(accuracy = 0.01,scale_cut = cut_long_scale())(total_etab),
+  total_eff = label_number(accuracy = 0.01,big.mark = " ",scale_cut = cut_long_scale())(total_eff) ,
+  prop_eff = percent_format(accuracy = 0.01)(prop_eff),
+  prop_etab = percent_format(accuracy = 0.01)(prop_etab)
+  
+ )
+  
+```
+
+```{r}
+secteurs <- Secteurs_etab_eff |> 
+ mutate(prop_eff = total_eff / sum(total_eff) ,
+        prop_etab = total_etab / sum(total_etab))
+```
+
+```{r}
+secteurs |> 
+ mutate(grand_secteur_activite = fct_reorder(grand_secteur_activite ,total_etab)) |>
+ ggplot(aes(y=grand_secteur_activite , x= total_etab , fill = grand_secteur_activite))+
+ geom_col(show.legend = FALSE)+
+ ggthemes::scale_fill_economist()+
+ ggthemes::theme_fivethirtyeight()+
+ scale_x_continuous(labels = label_number(scale_cut = cut_long_scale()) ,
+                    breaks = c(0 , 5000000,10000000 ,14000000) ,limits = c(0,16000000))+
+geom_text(
+    aes(
+      label = paste(label_number(
+        scale_cut = cut_long_scale(),
+        accuracy = 0.01
+      )(total_etab) , "(",percent_format(accuracy = 0.01)(prop_etab),")",sep = " "
+    )),
+    hjust = -0.1
+  ) 
+```
+
+### Quels secteurs dominent l'emploi ?
+
+```{r}
+secteurs |> 
+ mutate(grand_secteur_activite = fct_reorder(grand_secteur_activite ,total_eff)) |>
+ ggplot(aes(y=grand_secteur_activite , x= total_eff , fill = grand_secteur_activite))+
+ geom_col(show.legend = FALSE)+
+ ggthemes::scale_fill_economist()+
+ ggthemes::theme_fivethirtyeight()+
+ scale_x_continuous(labels = label_number(scale_cut = cut_long_scale()),
+                    breaks = c(0 , 50000000,100000000 ,140000000) ,limits = c(0,150000000))+
+geom_text(
+    aes(
+      label = paste(label_number(
+        scale_cut = cut_long_scale(),
+        accuracy = 0.01
+      )(total_eff) , "(",percent_format(accuracy = 0.01)(prop_eff),")",sep = " "
+    )),
+    hjust = -0.1
+  ) 
+```
+
+### Quel région concentre le plus de salariés ?
+
+```{r}
+
+source_note <- md("**Données** : URSSAF <br> **Auteur** : Ly Amadou <br> **Outils** : R, gt, dplyr")
+
+subtitle <- md(
+  "L’<b>Île-de-France</b> concentre <b>22 % des établissements</b> et plus de <b>25 % des salariés</b> du secteur privé, confirmant son rôle de principal moteur économique du pays."
+)
+
+table_region <- data |> 
+  group_by(region) |> 
+  summarise(
+    total_eff = sum(effectifs_salaries, na.rm = TRUE),
+    total_etab = sum(nb_etablissements, na.rm = TRUE),
+    .groups = "drop"
+  ) |> 
+  mutate(
+    prop_eff = total_eff / sum(total_eff),
+    prop_etab = total_etab / sum(total_etab),
+
+    slug_region = region |>
+      stringi::stri_trans_general("Latin-ASCII") |>
+      stringr::str_to_lower() |>
+      stringr::str_replace_all("'", "") |>
+      stringr::str_replace_all("[^a-z0-9]+", "-") |>
+      stringr::str_replace_all("^-|-$", ""),
+
+    logo_url = case_when(
+      region == "Martinique" ~ "https://www.regions-et-departements.fr/images/logos-departements/972-logo-departement-martinique.png",
+      region == "Guadeloupe" ~ "https://www.regions-et-departements.fr/images/logos-departements/971-logo-departement-guadeloupe.png",
+      region == "Guyane" ~ "https://www.regions-et-departements.fr/images/logos-departements/973-logo-departement-guyane.png",
+      region == "La Réunion" ~ "https://www.regions-et-departements.fr/images/logos-departements/974-logo-departement-la-reunion.png",
+
+      TRUE ~ paste0(
+        "https://www.regions-et-departements.fr/images/logos-regions/logo-",
+        slug_region,
+        ".png"
+      )
+    )
+  ) |> 
+  arrange(desc(prop_eff)) |> 
+  mutate(Rang = row_number()) |> 
+  select(Rang, logo_url, region, total_etab, prop_etab, total_eff, prop_eff)
+
+table_region_img <- table_region |> 
+  gt(rowname_col = "Rang") |> 
+  tab_header(
+    title = md("**Classement des régions concentrant le plus de salariés en France**"),
+    subtitle = subtitle
+  ) |> 
+  tab_source_note(source_note = source_note) |> 
+  text_transform(
+    locations = cells_body(columns = logo_url),
+    fn = function(x) {
+      web_image(url = x, height = px(30))
+    }
+  ) |> 
+  cols_label(
+    logo_url = "",
+    region = "Région",
+    total_eff = "Effectifs salariés",
+    prop_eff = "Part des salariés",
+    total_etab = "Établissements",
+    prop_etab = "Part des établissements"
+  ) |> 
+  fmt_number(
+    columns = c(total_etab, total_eff),
+    decimals = 0,
+    sep_mark = " "
+  ) |> 
+  fmt_percent(
+    columns = c(prop_etab, prop_eff),
+    decimals = 2
+  ) |> 
+  data_color(
+    columns = prop_eff,
+    palette = c("#EAF2FF", "#1F4E79")
+  ) |> 
+  data_color(
+    columns = prop_etab,
+    palette = c("#FFF3E0", "#E67E22")
+  ) |> 
+  tab_row_group(
+    label = "Régions majeures",
+    rows = region %in% c("Île-de-France", "Auvergne-Rhône-Alpes")
+  ) |> 
+  tab_row_group(
+    label = "Régions intermédiaires",
+    rows = region %in% c(
+      "Hauts-de-France",
+      "Nouvelle-Aquitaine",
+      "Grand Est",
+      "Occitanie",
+      "Provence-Alpes-Côte d'Azur",
+      "Pays de la Loire",
+      "Normandie",
+      "Bretagne",
+      "Bourgogne-Franche-Comté",
+      "Centre-Val de Loire"
+    )
+  ) |> 
+  tab_row_group(
+    label = "Territoires ultramarins et insulaires",
+    rows = region %in% c(
+      "La Réunion",
+      "Martinique",
+      "Guadeloupe",
+      "Corse",
+      "Guyane"
+    )
+  ) |> 
+  row_group_order(
+    groups = c(
+      "Régions majeures",
+      "Régions intermédiaires",
+      "Territoires ultramarins et insulaires"
+    )
+  ) |> 
+  tab_style(
+    locations = cells_body(
+      columns = c(region, total_eff, prop_eff, total_etab, prop_etab)
+    ),
+    style = cell_text(
+      font = google_font("Source Sans 3")
+    )
+  ) |> 
+  tab_style(
+    locations = cells_column_labels(everything()),
+    style = cell_text(
+      font = google_font("Source Sans 3"),
+      weight = "bold"
+    )
+  ) |> 
+  tab_options(
+    table.font.names = "Source Sans 3",
+    heading.title.font.size = px(22),
+    heading.subtitle.font.size = px(13),
+    data_row.padding = px(6),
+    table.width = pct(100)
+  )
+
+
+table_region_img |>  gtsave("Classement_regions.html")
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(sf)
+library(scales)
+library(showtext)
+library(sysfonts)
+library(stringr)
+library(stringi)
+
+
+
+regions_sf <- st_read(
+  "https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/regions-version-simplifiee.geojson",
+  quiet = TRUE
+)
+
+story_text <- paste0(
+  "L’**Île-de-France** concentre plus d’un quart des salariés du secteur privé. 
+  La carte met en évidence une géographie économique très polarisée : ,
+  quelques régions structurent fortement l’emploi national, tandis que les territoires ,
+  ultramarins et insulaires pèsent mécaniquement moins dans le total national."
+)
+
+data_region_map <- data |>
+  group_by(region) |>
+  summarise(
+    total_eff = sum(effectifs_salaries, na.rm = TRUE),
+    total_etab = sum(nb_etablissements, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(
+    prop_eff = total_eff / sum(total_eff),
+    prop_etab = total_etab / sum(total_etab)
+  )
+
+map_region <- regions_sf |>
+  left_join(data_region_map, by = c("nom" = "region"))
+
+
+ggplot(map_region) +
+  geom_sf(
+    aes(fill = prop_eff),
+    colour = "#F8F4EA",
+    linewidth = 0.35
+  ) +
+  scale_fill_gradientn(
+    colours = c(
+      "#F6E8C3",
+      "#D9A441",
+      "#C97B2B",
+      "#8C2F39",
+      "#0B1F33"
+    ),
+    labels = percent_format(accuracy = 1),
+    na.value = "#DDD8CE",
+    name = "Part des salariés"
+  ) +
+  labs(
+    title = "L’Île-de-France domine la géographie de l’emploi salarié privé",
+    subtitle = story_text,
+    caption = "Données : URSSAF | Auteur : Ly Amadou | Outils : R, ggplot2, sf"
+  ) +
+  theme_void(base_family = "source") +
+  theme(
+    plot.background = element_rect(fill = "#F7F3EA", colour = NA),
+    panel.background = element_rect(fill = "#F7F3EA", colour = NA),
+
+    legend.position = "left",
+    legend.background = element_rect(
+      fill = NA,
+      colour = NA
+    ),
+    legend.title = element_text(
+      family = "source",
+      face = "bold",
+      size = 10,
+      colour = "#0B1F33"
+    ),
+    legend.text = element_text(
+      family = "source",
+      size = 9,
+      colour = "#333333"
+    ),
+
+    plot.title = element_textbox_simple(
+      family = "playfair",
+      size = 12,
+      face = "bold",
+      colour = "#0B1F33",
+      margin = margin(b = 7)
+    ),
+    plot.subtitle = element_textbox_simple(
+      family = "source",
+      size = 8,
+      colour = "#5E5E5E",
+      margin = margin(b = 20 , t=10)
+    ),
+    plot.caption = element_text(
+      family = "source",
+      size = 9,
+      colour = "#6B6B6B",
+      hjust = 0,
+      margin = margin(t = 10)
+    ),
+    plot.margin = margin(20, 25, 18, 25)
+  )
+
+
+
+
+
+```
+
+### Quel département concentre le plus de salariés ?
+
+```{r}
+
+
+data |> 
+  group_by(departement, code_departement) |> 
+  summarise(
+    total_etab = sum(nb_etablissements, na.rm = TRUE), 
+    total_eff = sum(effectifs_salaries),
+    .groups = "drop"
+  ) |> 
+  mutate(
+    prop_eff = total_eff / sum(total_eff),
+    prop_etab = total_etab / sum(total_etab),
+    ratio_sal_etab = total_eff / total_etab,
+    
+    slug_dept = departement |>
+      stringi::stri_trans_general("Latin-ASCII") |>
+      tolower() |>
+      gsub("'", "", x = _) |>
+      gsub(" ", "-", x = _) |>
+      gsub("--+", "-", x = _),
+    
+    logo_url = paste0(
+      "https://www.regions-et-departements.fr/images/logos-departements/",
+      code_departement,
+      "-logo-",
+      slug_dept,
+      ".png"
+    )
+  ) |>
+  slice_max(order_by = total_eff, n = 10) |>
+  arrange(desc(total_eff)) |>
+  mutate(rang = row_number()) |> 
+  select(
+    rang,
+    logo_url,
+    departement,
+    total_eff,
+    prop_eff,
+    total_etab,
+    prop_etab,
+    ratio_sal_etab
+  ) |>
+  gt() |>
+  text_transform(
+    locations = cells_body(columns = logo_url),
+    fn = function(x) {
+      web_image(url = x, height = 34)
+    }
+  ) |>
+  cols_label(
+    rang = "Rang",
+    logo_url = "",
+    departement = "Département",
+    total_eff = "Effectifs salariés",
+    prop_eff = "Part des salariés",
+    total_etab = "Établissements",
+    prop_etab = "Part des établissements",
+    ratio_sal_etab = "Salariés / établissement"
+  ) |>
+  tab_header(
+    title = md("**Top 10 des départements concentrant le plus de salariés**"),
+    subtitle = md(
+      "Une lecture territoriale de la concentration de l’emploi salarié privé.  
+      Le ratio salariés/établissement permet d’identifier les départements où les structures économiques sont en moyenne plus grandes."
+    )
+  ) |>
+  fmt_number(
+    columns = c(total_eff, total_etab),
+    decimals = 0,
+    sep_mark = " "
+  ) |>
+  fmt_percent(
+    columns = c(prop_eff, prop_etab),
+    decimals = 2
+  ) |>
+  fmt_number(
+    columns = ratio_sal_etab,
+    decimals = 1
+  ) |>
+  data_color(
+    columns = prop_eff,
+    palette = c("#EAF2FF", "#1F4E79")
+  ) |>
+  data_color(
+    columns = ratio_sal_etab,
+    palette = c("#FFF3E0", "#E67E22")
+  ) |>
+  tab_style(
+    style = cell_text(
+      font = google_font("Playfair Display"),
+      size = px(22),
+      weight = "bold",
+      color = "#1B263B"
+    ),
+    locations = cells_title(groups = "title")
+  ) |>
+  tab_style(
+    style = cell_text(
+      font = google_font("Source Sans 3"),
+      size = px(14),
+      color = "#415A77"
+    ),
+    locations = cells_title(groups = "subtitle")
+  ) |>
+  tab_style(
+    style = cell_text(
+      font = google_font("JetBrains Mono"),
+      size = px(13)
+    ),
+    locations = cells_body(
+      columns = c(total_eff, prop_eff, total_etab, prop_etab, ratio_sal_etab)
+    )
+  ) |>
+  tab_options(
+    table.font.names = "Source Sans 3",
+    heading.background.color = "#F4F7FB",
+    column_labels.background.color = "#1B263B",
+    column_labels.font.weight = "bold",
+    column_labels.font.size = px(13),
+    table.border.top.color = "#1B263B",
+    table.border.bottom.color = "#1B263B",
+    data_row.padding = px(7)
+  ) |>
+  tab_source_note(
+    source_note = md("**Source : Urssaf** - logos : regions-et-departements.fr — traitement sous R. <br> **Auteur : Ly Amadou**")
+  )
+```
+
+Avec 7,81 % des effectifs salariés observés, Paris occupe la première place du classement des départements concentrant le plus d'emplois salariés en France. Il est suivi par les Hauts-de-Seine, qui représentent à eux seuls 5,16 % des salariés.
+
+Une observation particulièrement intéressante ressort de cette analyse : un nombre élevé d'établissements n'est pas nécessairement synonyme d'un volume proportionnellement élevé de salariés. En effet, des départements comme Paris, le Rhône ou les Bouches-du-Rhône disposent d'un très grand nombre d'établissements, mais cette caractéristique ne suffit pas à expliquer à elle seule la concentration de l'emploi.
+
+Le cas des Hauts-de-Seine illustre parfaitement ce phénomène. Bien que ce département compte près de trois fois moins d'établissements que Paris, il concentre une part des salariés relativement proche de celle de la capitale (5,16 % contre 7,81 %). Cette situation suggère la présence d'établissements de plus grande taille ou d'une concentration plus importante de sièges sociaux et de grandes entreprises.
+
+Ces premiers résultats indiquent que la dynamique de l'emploi ne dépend pas uniquement du nombre d'établissements présents sur un territoire, mais également de leur taille moyenne et de leur capacité à employer un grand nombre de salariés.
+
+### À quoi ressemble réellement la structure des établissements français : un paysage dominé par quelques grands groupes ou par une multitude de petites structures ?
+
+Derrière les chiffres se dessine une réalité économique assez nette : la majorité des établissements français sont de taille modeste. Près de deux établissements sur trois emploient moins de 100 salariés, alors que les structures de grande dimension restent exceptionnelles. Les établissements de 500 salariés ou plus ne représentent qu'environ 8 % du total. Autrement dit, le paysage économique repose largement sur un tissu dense de petites et moyennes structures, tandis que les grands employeurs constituent une minorité.
+
+```{r}
+library(tidyverse)
+library(scales)
+library(ggtext)
+library(ggsci)
+
+
+font_add_google("Playfair Display", "playfair")
+font_add_google("Source Sans 3", "source")
+showtext_auto()
+title_family <- "playfair"
+body_family  <- "source"
+
+title <- "Un tissu économique dominé par les petites structures"
+
+subtitle <- "Près de <b>2 établissements sur 3</b> emploient moins de <b>100 salariés</b>, illustrant la prédominance des petites structures dans l’économie française."
+
+data |> 
+  count(tranche_effectif, name = "n") |> 
+  mutate(
+    prop = n / sum(n),
+    tranche_effectif = forcats::fct_infreq(tranche_effectif)
+  ) |> 
+  ggplot(aes(
+    y = fct_rev(tranche_effectif),
+    x = n,
+    fill = tranche_effectif
+  )) +
+  geom_col(
+    show.legend = FALSE,
+    width = 0.75,
+    alpha = 0.85
+  ) +
+  geom_text(
+    aes(label = percent(prop, accuracy = 0.01)),
+    hjust = -0.15,
+    size = 4,
+    family = "serif"
+  ) +
+  ggsci::scale_fill_npg(alpha = 0.65) +
+  scale_x_continuous(
+    labels = label_number(big.mark = " "),
+    expand = expansion(mult = c(0, 0.12))
+  ) +
+  labs(
+    x = "Nombre d’établissements",
+    y = "Tranche d’effectif salarié",
+    title = title,
+    subtitle = subtitle,
+    caption = "Lecture : chaque barre représente la part des établissements selon leur tranche d’effectif salarié."
+  ) +
+  theme_minimal(base_family = body_family) +
+theme(
+  plot.title = element_text(
+    family = title_family,
+    size = 22,
+    face = "bold"
+  ),
+  plot.subtitle = ggtext::element_textbox_simple(
+    family = body_family,
+    size = 11.5,
+    lineheight = 1.25 
+    ),
+  axis.title.x = element_text(
+      margin = margin(t = 12),
+      size = 11
+    ),
+    axis.title.y = element_text(
+      margin = margin(r = 12),
+      size = 11
+    ),
+    axis.text = element_text(size = 10),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.caption = element_text(
+      size = 9,
+      color = "grey40",
+      hjust = 0,
+      margin = margin(t = 15)
+    )
+  )
+```
+
+### Quels sont les secteurs qui regroupe le plus d'établissement de grande taille ?
+
+```{r}
+data |> filter(tranche_effectif == "g) 500 à 1999" |tranche_effectif == "h) 2000 et plus" ) |> 
+ count(region) |> 
+ mutate(prop = (n /sum(n))*100) |>
+ arrange(desc(prop)) |>
+ slice_max(order_by = prop , n=10)
+```
+
+Les établissements de grande taille se concentrent principalement dans quelques régions, avec une prédominance nette de l’Île-de-France, qui regroupe à elle seule près d’un établissement sur cinq (19,3 %). Elle devance largement l’Auvergne-Rhône-Alpes (11,9 %), dont le poids est environ 1,6 fois inférieur, soit un peu plus d’un établissement sur dix.
+
+Cette concentration confirme le rôle central de l’Île-de-France dans l’activité économique française et son attractivité pour les entreprises.
+
+### Evolution temporelle des salariés en fonction des régions
+
+```{r}
+ region_evol <- data |> 
+ group_by(annee,region) |> 
+ summarise(total_salaries = sum(effectifs_salaries))
+
+```
+
+```{r}
+
+lookup <- region_evol |> 
+ filter(annee==2006) |> 
+ select(region , total_salaries)
+
+new_plot_data <- region_evol |> 
+ left_join(lookup , by ="region") |> 
+ rename(
+    total_salaries = total_salaries.x,
+    total_salaries_2006 = total_salaries.y
+  ) |>
+  mutate(
+    change = (
+      100 * (total_salaries - total_salaries_2006) / total_salaries_2006)
+  ) |>
+  select(annee = annee.x, region, change)
+```
+
+```{r}
+text_col <- "#2F2F2F"
+bg_col <- "#FAFAFA"
+
+lookup <- region_evol |> 
+  filter(annee == 2006) |> 
+  select(region, total_salaries_2006 = total_salaries)
+
+new_plot_data <- region_evol |> 
+  left_join(lookup, by = "region") |> 
+  mutate(
+    change = 100 * (total_salaries - total_salaries_2006) / total_salaries_2006
+  ) |> 
+  select(annee, region, change)
+
+ggplot(
+ new_plot_data,
+ aes(x = annee, y = change, color = region)
+) +
+ geom_hline(
+  yintercept = 0,
+  linewidth = 0.3,
+  color = "grey65"
+ ) +
+ geom_line(
+  linewidth = 0.8,
+  alpha = 0.9
+ ) +
+ # geom_point(
+ #   size = 1.2,
+ #   alpha = 0.85
+ # ) +
+ facet_wrap(~ region, nrow = 2) +
+ scale_color_viridis_d(direction = -1) +
+ scale_y_continuous(
+  labels = label_percent(scale = 1),
+  expand = expansion(mult = c(0.05, 0.12))
+ ) +
+ gghighlight(use_direct_label = FALSE)+
+ scale_x_continuous(
+  breaks = seq(2006, 2025, by = 4)
+ ) +
+ labs(
+  title = "Évolution régionale de l’emploi salarié privé depuis 2006",
+  subtitle = "Chaque courbe mesure la variation des effectifs salariés par rapport au niveau observé en 2006.",
+  x = NULL,
+  y = "Variation depuis 2006",
+  caption = "Données : URSSAF | Auteur : Ly Amadou | Outils : R, ggplot2, dplyr"
+ ) +
+ theme_minimal(
+  base_size = 8,
+  base_family = body_font
+ ) +
+ theme(
+  legend.position = "none",
+  plot.title.position = "plot",
+  plot.caption.position = "plot",
+  
+  panel.spacing = unit(1.1, "lines"),
+  
+  plot.background = element_rect(fill = bg_col, color = bg_col),
+  panel.background = element_rect(fill = bg_col, color = bg_col),
+  
+  plot.title = element_textbox_simple(
+   family = title_font,
+   color = text_col,
+   size = 18,
+   face = "bold",
+   lineheight = 1.05,
+   margin = margin(b = 8)
+  ),
+  
+  plot.subtitle = element_textbox_simple(
+   family = body_font,
+   color = "grey35",
+   size = 9.5,
+   lineheight = 1.2,
+   margin = margin(b = 14)
+  ),
+  
+  strip.text = element_text(
+   family = body_font,
+   face = "bold",
+   color = text_col,
+   size = 3
+  ),
+  
+  # axis.text = element_text(
+  #  color = "grey35",
+  #  size = 4
+  # ),
+  
+  axis.title.y = element_text(
+   color = text_col,
+   size = 8,
+   margin = margin(r = 8)
+  ),
+  axis.text.x = element_text(
+   color = text_col,
+   size = 3,
+   margin = margin(r = 8)
+  ),
+  
+  panel.grid.minor = element_blank(),
+  panel.grid.major.x = element_line(linetype="dashed"),
+  
+  plot.caption = element_textbox_simple(
+   family = body_font,
+   hjust = 0,
+   color = "grey45",
+   size = 7,
+   lineheight = 1.1,
+   margin = margin(t = 12)
+  ),
+  
+  plot.margin = margin(12, 18, 12, 12)
+ )
+```
+
+### Quels départements progressent le plus ?
+
+```{r}
+growth_dept <- data |>
+  filter(annee %in% c(2006, 2025)) |>
+  group_by(annee, departement) |>
+  summarise(
+    effectifs_salaries = sum(effectifs_salaries, na.rm = TRUE),
+    nb_etablissements = sum(nb_etablissements, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  tidyr::pivot_wider(
+    names_from = annee,
+    values_from = c(effectifs_salaries, nb_etablissements),
+    names_sep = "_"
+  ) |>
+  mutate(
+    growth_eff_rate = round(
+      100 * (effectifs_salaries_2025 - effectifs_salaries_2006) /
+        effectifs_salaries_2006,
+      2
+    ),
+    growth_etab_rate = round(
+      100 * (nb_etablissements_2025 - nb_etablissements_2006) /
+        nb_etablissements_2006,
+      2
+    )
+  ) |>
+  select(
+    departement,
+    growth_eff_rate,
+    growth_etab_rate
+  ) |>
+  # arrange(desc(growth_eff_rate)) |> 
+ slice_max(n=20 , order_by = growth_eff_rate)
+```
+
+```{r}
+
+
+source_note <- md(
+  "**Données** : URSSAF <br>
+   **Auteur** : Ly Amadou <br>
+   **Outils** : R, dplyr, gt"
+)
+
+subtitle_growth <- md(
+  "Entre <b>2006 et 2025</b>, la dynamique de l’emploi salarié privé révèle une France à plusieurs vitesses.
+  Les territoires ultramarins comme la <b>Guyane</b> et <b>La Réunion</b> affichent les plus fortes progressions,
+  tandis que plusieurs départements métropolitains attractifs — <b>Seine-Saint-Denis</b>, <b>Haute-Garonne</b>,
+  <b>Gironde</b> et <b>Loire-Atlantique</b> — confirment leur rôle de pôles de croissance démographique,
+  économique et productive."
+)
+
+table_growth_gt <- growth_dept  |>
+  mutate(
+    rang = row_number(),
+    interpretation = case_when(
+      growth_eff_rate >= 50 ~ "Croissance exceptionnelle",
+      growth_eff_rate >= 30 ~ "Très forte dynamique",
+      growth_eff_rate >= 20 ~ "Croissance solide",
+      TRUE ~ "Progression modérée"
+    )
+  ) |>
+  select(
+    rang,
+    departement,
+    growth_eff_rate,
+    growth_etab_rate,
+    interpretation
+  ) |>
+  gt(rowname_col = "rang") |>
+  tab_header(
+    title = md("**Les départements où l’emploi salarié privé a le plus progressé**"),
+    subtitle = subtitle_growth
+  ) |>
+  tab_source_note(source_note = source_note) |>
+  cols_label(
+    departement = "Département",
+    growth_eff_rate = "Croissance salariés",
+    growth_etab_rate = "Croissance établissements",
+    interpretation = "Lecture"
+  ) |>
+  fmt_number(
+    columns = c(growth_eff_rate, growth_etab_rate),
+    decimals = 2,
+    suffixing = FALSE
+  ) |>
+  text_transform(
+    locations = cells_body(columns = c(growth_eff_rate, growth_etab_rate)),
+    fn = function(x) paste0(x, " %")
+  ) |>
+  data_color(
+    columns = growth_eff_rate,
+    palette = c("#F6E8C3", "#D9A441", "#C97B2B", "#8C2F39", "#0B1F33")
+  ) |>
+  data_color(
+    columns = growth_etab_rate,
+    palette = c("#EAF2FF", "#7FB3D5", "#21618C")
+  ) |>
+  tab_style(
+    locations = cells_body(columns = departement),
+    style = cell_text(
+      weight = "bold",
+      color = "#0B1F33"
+    )
+  ) |>
+  tab_style(
+    locations = cells_body(
+      columns = interpretation,
+      rows = interpretation == "Croissance exceptionnelle"
+    ),
+    style = list(
+      cell_fill(color = "#0B1F33"),
+      cell_text(color = "white", weight = "bold")
+    )
+  ) |>
+  tab_style(
+    locations = cells_body(
+      columns = interpretation,
+      rows = interpretation == "Très forte dynamique"
+    ),
+    style = list(
+      cell_fill(color = "#8C2F39"),
+      cell_text(color = "white", weight = "bold")
+    )
+  ) |>
+  tab_style(
+    locations = cells_body(
+      columns = interpretation,
+      rows = interpretation == "Croissance solide"
+    ),
+    style = list(
+      cell_fill(color = "#F6E8C3"),
+      cell_text(color = "#0B1F33", weight = "bold")
+    )
+  ) |>
+  tab_style(
+    locations = cells_title(groups = "title"),
+    style = cell_text(
+      font = google_font("Playfair Display"),
+      size = px(24),
+      weight = "bold",
+      color = "#0B1F33"
+    )
+  ) |>
+  tab_style(
+    locations = cells_title(groups = "subtitle"),
+    style = cell_text(
+      font = google_font("Source Sans 3"),
+      size = px(13),
+      color = "#4A4A4A"
+    )
+  ) |>
+  tab_style(
+    locations = cells_column_labels(everything()),
+    style = cell_text(
+      font = google_font("Source Sans 3"),
+      weight = "bold",
+      color = "#0B1F33"
+    )
+  ) |>
+  tab_options(
+    table.font.names = "Source Sans 3",
+    table.background.color = "#F7F3EA",
+    heading.background.color = "#F7F3EA",
+    column_labels.background.color = "#EFE6D8",
+    data_row.padding = px(7),
+    table.width = pct(100),
+    row.striping.include_table_body = TRUE,
+    row.striping.background_color = "#FBF8F1"
+  )
+
+table_growth_gt
+```
+
+```{r}
+# data_2006 <- data|> 
+#  filter(annee==2006) |> 
+#  select(departement , region ,nb_etablissements_2006= nb_etablissements , effectifs_salaries_2006 =effectifs_salaries )
+# 
+# 
+# base <-  data |> 
+#  select(annee,departement , region , nb_etablissements , effectifs_salaries )
+# 
+# 
+# base |> 
+#  left_join(data_2006 , by = c("departement" , "region" ), relationship = "many-to-many"  ) |> 
+#  mutate(
+#   growt_etab_rate =100*(nb_etablissements - nb_etablissements_2006)/nb_etablissements_2006,
+#   growth_eff_rate = 100 *(effectifs_salaries - effectifs_salaries_2006) / effectifs_salaries_2006
+#   ) |> 
+#  select
+```
+
+### Quels régions progressent le plus ?
+
+```{r}
+growth_reg <- data |>
+  filter(annee %in% c(2006, 2025)) |>
+  group_by(annee, region) |>
+  summarise(
+    effectifs_salaries = sum(effectifs_salaries, na.rm = TRUE),
+    nb_etablissements = sum(nb_etablissements, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  tidyr::pivot_wider(
+    names_from = annee,
+    values_from = c(effectifs_salaries, nb_etablissements),
+    names_sep = "_"
+  ) |>
+  mutate(
+    growth_eff_rate = round(
+      100 * (effectifs_salaries_2025 - effectifs_salaries_2006) /
+        effectifs_salaries_2006,
+      2
+    ),
+    growth_etab_rate = round(
+      100 * (nb_etablissements_2025 - nb_etablissements_2006) /
+        nb_etablissements_2006,
+      2
+    )
+  ) |>
+  select(
+    region,
+    growth_eff_rate,
+    growth_etab_rate
+  ) 
+```
+
+```{r}
+
+
+source_note <- md(
+  "**Données** : URSSAF <br>
+   **Auteur** : Ly Amadou <br>
+   **Outils** : R, dplyr, gt"
+)
+
+subtitle_region_growth <- md(
+  "Entre <b>2006 et 2025</b>, la croissance de l’emploi salarié privé est portée par les
+  <b>territoires ultramarins</b>, avec une progression exceptionnelle en <b>Guyane</b>.
+  En métropole, la dynamique se concentre surtout dans les régions du <b>Sud</b>,
+  de l’<b>Ouest</b> et en <b>Île-de-France</b>, tandis que le <b>Centre-Val de Loire</b>,
+  le <b>Grand Est</b> et la <b>Bourgogne-Franche-Comté</b> montrent une trajectoire plus fragile."
+)
+
+table_region_growth_gt <- growth_reg |>
+  arrange(desc(growth_eff_rate)) |>
+  mutate(
+    rang = row_number(),
+    lecture = case_when(
+      growth_eff_rate >= 40 ~ "Croissance exceptionnelle",
+      growth_eff_rate >= 20 ~ "Très forte dynamique",
+      growth_eff_rate >= 10 ~ "Croissance solide",
+      growth_eff_rate >= 0  ~ "Progression faible",
+      TRUE ~ "Recul de l’emploi"
+    )
+  ) |>
+  select(
+    rang,
+    region,
+    growth_eff_rate,
+    growth_etab_rate,
+    lecture
+  ) |>
+  gt(rowname_col = "rang") |>
+  tab_header(
+    title = md("**Croissance de l’emploi salarié privé par région**"),
+    subtitle = subtitle_region_growth
+  ) |>
+  tab_source_note(source_note = source_note) |>
+  cols_label(
+    region = "Région",
+    growth_eff_rate = "Croissance salariés",
+    growth_etab_rate = "Croissance établissements",
+    lecture = "Lecture"
+  ) |>
+  fmt_number(
+    columns = c(growth_eff_rate, growth_etab_rate),
+    decimals = 2
+  ) |>
+  text_transform(
+    locations = cells_body(columns = c(growth_eff_rate, growth_etab_rate)),
+    fn = function(x) paste0(x, " %")
+  ) |>
+  data_color(
+    columns = growth_eff_rate,
+    palette = c("#B23A48", "#F6E8C3", "#D9A441", "#C97B2B", "#0B1F33")
+  ) |>
+  data_color(
+    columns = growth_etab_rate,
+    palette = c("#EFEFEF", "#D9EAF7", "#7FB3D5", "#21618C")
+  ) |>
+  tab_style(
+    locations = cells_body(columns = region),
+    style = cell_text(
+      weight = "bold",
+      color = "#0B1F33"
+    )
+  ) |>
+  tab_style(
+    locations = cells_body(
+      columns = lecture,
+      rows = lecture == "Croissance exceptionnelle"
+    ),
+    style = list(
+      cell_fill(color = "#0B1F33"),
+      cell_text(color = "white", weight = "bold")
+    )
+  ) |>
+  tab_style(
+    locations = cells_body(
+      columns = lecture,
+      rows = lecture == "Très forte dynamique"
+    ),
+    style = list(
+      cell_fill(color = "#8C2F39"),
+      cell_text(color = "white", weight = "bold")
+    )
+  ) |>
+  tab_style(
+    locations = cells_body(
+      columns = lecture,
+      rows = lecture == "Recul de l’emploi"
+    ),
+    style = list(
+      cell_fill(color = "#B23A48"),
+      cell_text(color = "white", weight = "bold")
+    )
+  ) |>
+  tab_style(
+    locations = cells_title(groups = "title"),
+    style = cell_text(
+      font = google_font("Playfair Display"),
+      size = px(24),
+      weight = "bold",
+      color = "#0B1F33"
+    )
+  ) |>
+  tab_style(
+    locations = cells_title(groups = "subtitle"),
+    style = cell_text(
+      font = google_font("Source Sans 3"),
+      size = px(13),
+      color = "#4A4A4A"
+    )
+  ) |>
+  tab_style(
+    locations = cells_column_labels(everything()),
+    style = cell_text(
+      font = google_font("Source Sans 3"),
+      weight = "bold",
+      color = "#0B1F33"
+    )
+  ) |>
+  tab_options(
+    table.font.names = "Source Sans 3",
+    table.background.color = "#F7F3EA",
+    heading.background.color = "#F7F3EA",
+    column_labels.background.color = "#EFE6D8",
+    data_row.padding = px(7),
+    table.width = pct(100),
+    row.striping.include_table_body = TRUE,
+    row.striping.background_color = "#FBF8F1"
+  )
+
+table_region_growth_gt
+```
+
+```{r}
+
+library(sf)
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(ggtext) 
+library(showtext)
+library(sysfonts)
+
+departements_sf <- st_read(
+ "https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/departements-version-simplifiee.geojson",
+ quiet = TRUE
+)
+
+map_region_om <- departements_sf |>
+ left_join(
+  data |>
+   group_by(code_departement = as.character(code_departement), region) |>
+   summarise(
+    total_eff = sum(effectifs_salaries, na.rm = TRUE),
+    total_etab = sum(nb_etablissements, na.rm = TRUE),
+    .groups = "drop"
+   ),
+  by = c("code" = "code_departement")
+ ) |>
+ group_by(region) |>
+ summarise(
+  total_eff = sum(total_eff, na.rm = TRUE),
+  total_etab = sum(total_etab, na.rm = TRUE),
+  geometry = st_union(geometry),
+  .groups = "drop"
+ ) |>
+ mutate(
+  prop_eff = total_eff / sum(total_eff, na.rm = TRUE),
+  prop_etab = total_etab / sum(total_etab, na.rm = TRUE),
+  point = st_point_on_surface(geometry),
+  x = st_coordinates(point)[, 1],
+  y = st_coordinates(point)[, 2],
+  label_region = case_when(
+   prop_eff >= 0.0 ~ paste0(region, "\n", percent(prop_eff, accuracy = 0.1)),
+   region == "Île-de-France" ~ paste0(region, "\n", percent(prop_eff, accuracy = 0.1)),
+   TRUE ~ NA_character_
+  ),
+  colors = if_else(region == "Île-de-France", "white", "#0B1F33")
+ )
+
+
+map <- ggplot(map_region_om) +
+ geom_sf(
+  aes(fill = prop_eff),
+  colour = "#F8F4EA",
+  linewidth = 0.32
+ ) +
+ geom_text(
+  data = map_region_om |> filter(!is.na(label_region)),
+  aes(x = x, y = y, label = label_region, colour = colors),
+  family = "source",
+  fontface = "bold",
+  size = 3.1,
+  lineheight = 0.9
+ ) +
+ scale_colour_identity() +
+ scale_fill_gradientn(
+  colours = c("#F6E8C3", "#D9A441", "#C97B2B", "#8C2F39", "#0B1F33"),
+  labels = percent_format(accuracy = 1),
+  na.value = "#DDD8CE",
+  name = "Part des salariés"
+ ) +
+ guides(
+  fill = guide_colorbar(
+   title.position = "top",
+   title.hjust = 0,
+   barheight = unit(4.2, "cm"),
+   barwidth = unit(0.35, "cm")
+  )
+ ) +
+ labs(
+  title = "L’Île-de-France domine la géographie de l’emploi salarié privé",
+  subtitle = story_text,
+  caption = "Données : URSSAF | Auteur : Ly Amadou | Outils : R, ggplot2, sf"
+ ) +
+ coord_sf(clip = "off") +
+ theme_void(base_family = "source")
+
+map <- ggplot(map_region_om) +
+  geom_sf(
+    aes(fill = prop_eff),
+    colour = "#F8F4EA",
+    linewidth = 0.32
+  ) +
+  geom_text(
+    data = map_region_om |> filter(!is.na(label_region)),
+    aes(x = x, y = y, label = label_region, colour = colors),
+    family = "source",
+    fontface = "bold",
+    size = 3.1,
+    lineheight = 0.9
+  ) +
+  scale_colour_identity() +
+  scale_fill_gradientn(
+    colours = c("#F6E8C3", "#D9A441", "#C97B2B", "#8C2F39", "#0B1F33"),
+    labels = percent_format(accuracy = 1),
+    na.value = "#DDD8CE",
+    name = "Part des salariés"
+  ) +
+  guides(
+    fill = guide_colorbar(
+      title.position = "top",
+      title.hjust = 0,
+      barheight = unit(4.2, "cm"),
+      barwidth = unit(0.35, "cm")
+    )
+  ) +
+  labs(
+    title = "L’Île-de-France domine la géographie de l’emploi salarié privé",
+    subtitle = story_text,
+    caption = "Données : URSSAF | Auteur : Ly Amadou | Outils : R, ggplot2, sf"
+  ) +
+  coord_sf(clip = "off") +
+  theme_void(base_family = "source") +
+  theme(
+   plot.background = element_rect(fill = "#F7F3EA", colour = NA),
+   panel.background = element_rect(fill = "#F7F3EA", colour = NA),
+
+   legend.position = "right",
+   legend.background = element_rect(fill = NA, colour = NA),
+   legend.text = element_text(
+    family = "source",
+    face = "bold",
+    size = 8.5,
+    colour = "#0B1F33"
+   ),
+   legend.title = element_text(
+    family = "source",
+    face = "bold",
+    size = 10.5,
+    colour = "#0B1F33"
+   ),
+
+   plot.title = element_textbox_simple(
+    family = "playfair",
+    size = 23,
+    face = "bold",
+    colour = "#0B1F33",
+    lineheight = 0.88,
+    margin = margin(b = 12, t = 4),
+    width = unit(0.95, "npc")
+   ),
+   plot.subtitle = element_textbox_simple(
+    family = "source",
+    size = 12,
+    colour = "#5E5E5E",
+    lineheight = 1.05,
+    margin = margin(b = 12, t = 2),
+    width = unit(0.92, "npc")
+   ),
+   plot.caption = element_text(
+    family = "source",
+    size = 8.5,
+    colour = "#6B6B6B",
+    hjust = 0.5,
+    margin = margin(t = 8)
+   ),
+   plot.margin = margin(18, 22, 14, 22)
+  )
+
+map
+
+ggsave( filename = "C:/Full_stack/R_studio/projet_ml/Projet2/DFGIP/figures/map.png", plot = map, width = 8, height = 8.3, units = "in", dpi = 320, bg = "#F7F3EA" )
+
+```
+
+### Quels secteurs croissent le plus ?
+
+```{r}
+```
