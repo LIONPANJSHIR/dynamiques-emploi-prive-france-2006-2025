@@ -5,7 +5,6 @@
 Ce projet analyse près de **20 années d'évolution de l'emploi salarié privé français** afin de comprendre où se concentre l'emploi, quels secteurs structurent le marché du travail et comment les dynamiques diffèrent selon les territoires.
 
 L'objectif n'est pas uniquement de produire des visualisations, mais de transformer des données publiques en **indicateurs interprétables et enseignements utiles à la décision**.
-
 ---
 
 ## 🎯 Problématique
