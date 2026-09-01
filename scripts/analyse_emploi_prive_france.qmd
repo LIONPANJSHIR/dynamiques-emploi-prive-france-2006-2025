@@ -1123,11 +1123,11 @@ plot_eff_map <- ggplot(map_region) +
     linewidth = 0.35
   ) +
 
-  # Labels gris
+  # Labels 
   geom_sf_text(
     data = map_labels_main,
     aes(label = label),
-    colour = "#666666",
+    colour = "#F8F4EA",
     family = "source",
     size = 3,
     fontface = "bold",
@@ -1196,7 +1196,7 @@ plot_eff_map <- ggplot(map_region) +
       size = 16,
       face = "bold",
       colour = "#0B1F33",
-      margin = margin(b = 8)
+      margin = margin(b = 18 , t=3)
     ),
 
     plot.subtitle = element_textbox_simple(
@@ -1205,7 +1205,7 @@ plot_eff_map <- ggplot(map_region) +
       colour = "#5E5E5E",
       lineheight = 1.3,
       margin = margin(
-        t = 10,
+        t = 15,
         b = 22
       )
     ),
@@ -1252,180 +1252,245 @@ L’**Île-de-France** apparaît nettement comme le principal pôle d’emploi p
 ### Q**uelles régions ont créé le plus d’emplois depuis 2006 ?**
 
 ```{r}
-region_evol <- data |> 
- group_by(annee, region) |> 
- summarise(
-  total_salaries = sum(effectifs_salaries, na.rm = TRUE),
-  .groups = "drop"
- )
+# region_evol <- data |> 
+#  group_by(annee, region) |> 
+#  summarise(
+#   total_salaries = sum(effectifs_salaries, na.rm = TRUE),
+#   .groups = "drop"
+#  )
 
-lookup <- region_evol |> 
- filter(annee == 2006) |> 
- select(
-  region,
-  total_salaries_2006 = total_salaries
- )
+# lookup <- region_evol |> 
+#  filter(annee == 2006) |> 
+#  select(
+#   region,
+#   total_salaries_2006 = total_salaries
+#  )
 
-new_plot_data <- region_evol |> 
- left_join(lookup, by = "region") |> 
- mutate(
-  change = 100 * (
-   total_salaries - total_salaries_2006
-  ) / total_salaries_2006
- )
+# new_plot_data <- region_evol |> 
+#  left_join(lookup, by = "region") |> 
+#  mutate(
+#   change = 100 * (
+#    total_salaries - total_salaries_2006
+#   ) / total_salaries_2006
+#  )
 
+region_evol <- data |>  
+  group_by(annee, region) |>  
+  summarise( 
+    total_salaries = sum(effectifs_salaries, na.rm = TRUE), 
+    .groups = "drop" 
+  ) 
+
+lookup <- region_evol |>  
+  filter(annee == 2006) |>  
+  select( 
+    region, 
+    total_salaries_2006 = total_salaries 
+  ) 
+
+new_plot_data <- region_evol |>  
+  left_join(lookup, by = "region") |>  
+  mutate( 
+    change = 100 * (
+      total_salaries - total_salaries_2006
+    ) / total_salaries_2006,
+
+    # retour à la ligne pour les noms longs
+    region_label = stringr::str_wrap(
+      region,
+      width = 20
+    )
+  )
 ```
 
 ```{r}
-
-
-
+#| fig-width: 13
+#| fig-height: 10
+#| fig-align: center
+#| out-width: "100%"
+#| 
 gg_region_evolution <- ggplot(
- new_plot_data,
- aes(
-  x = annee,
-  y = change,
-  color = region
- )
+  new_plot_data,
+  aes(
+    x = annee,
+    y = change,
+    color = region
+  )
 ) +
- geom_hline(
-  yintercept = 0,
-  linewidth = 0.3,
-  color = "grey65"
- ) +
- geom_line(
-  linewidth = 0.9
- ) +
- facet_wrap(~ region, nrow = 3) +
- scale_color_viridis_d(direction = -1) +
- gghighlight(
-  use_direct_label = FALSE,
-  unhighlighted_params = list(
-   colour = "grey85",
-   linewidth = 0.5,
-   alpha = 0.7
+
+  geom_hline(
+    yintercept = 0,
+    linewidth = 0.3,
+    color = "grey65"
+  ) +
+
+  geom_line(
+    linewidth = 0.9
+  ) +
+
+  facet_wrap(
+    ~ region_label,
+    nrow = 3
+  ) +
+
+  scale_color_viridis_d(
+    direction = -1
+  ) +
+
+  gghighlight(
+    use_direct_label = FALSE,
+    unhighlighted_params = list(
+      colour = "grey85",
+      linewidth = 0.5,
+      alpha = 0.7
+    )
+  ) +
+
+  scale_y_continuous(
+    labels = label_percent(scale = 1),
+    expand = expansion(
+      mult = c(0.05, 0.12)
+    )
+  ) +
+
+  # beaucoup moins d'années affichées
+  scale_x_continuous(
+    breaks = c(
+      2006,
+      2012,
+      2018,
+      2025
+    ),
+    labels = c(
+      "06",
+      "12",
+      "18",
+      "25"
+    ),
+    expand = expansion(
+      mult = c(0.02, 0.02)
+    )
+  ) +
+
+  labs(
+    title = "La dynamique de l’emploi diffère fortement selon les régions",
+
+    subtitle = paste0(
+      "Évolution des effectifs salariés privés par rapport ",
+      "à leur niveau de 2006."
+    ),
+
+    x = NULL,
+    y = "Variation depuis 2006",
+
+    caption = paste0(
+      "Base 2006 = 0 % • Données : URSSAF\n",
+      "Auteur : Ly Amadou • Outils : R, ggplot2, dplyr"
+    )
+  ) +
+
+  theme_minimal(
+    base_size = 10,
+    base_family = body_font
+  ) +
+
+  theme(
+    legend.position = "none",
+
+    plot.title.position = "plot",
+    plot.caption.position = "plot",
+
+    panel.spacing = unit(
+      1.1,
+      "lines"
+    ),
+
+    plot.background = element_rect(
+      fill = bg_col,
+      color = NA
+    ),
+
+    panel.background = element_rect(
+      fill = bg_col,
+      color = NA
+    ),
+
+    plot.title = element_textbox_simple(
+      family = title_font,
+      color = text_col,
+      size = 18,
+      face = "bold",
+      lineheight = 1.05,
+      margin = margin(b = 8)
+    ),
+
+    plot.subtitle = element_textbox_simple(
+      family = body_font,
+      color = "grey35",
+      size = 12,
+      lineheight = 1.2,
+      margin = margin(b = 14)
+    ),
+
+    strip.text = element_text(
+      family = body_font,
+      face = "bold",
+      color = text_col,
+      size = 9,
+      lineheight = 0.95,
+      margin = margin(
+        b = 5
+      )
+    ),
+
+    axis.title.y = element_text(
+      color = text_col,
+      size = 9,
+      margin = margin(r = 8)
+    ),
+
+    axis.text.x = element_text(
+      color = "grey40",
+      size = 7.5,
+      angle = 30,
+      hjust = 1,
+      vjust = 1
+    ),
+
+    axis.text.y = element_text(
+      color = "grey40",
+      size = 8
+    ),
+
+    panel.grid.minor = element_blank(),
+
+    panel.grid.major.x = element_line(
+      color = "grey88",
+      linetype = "dashed",
+      linewidth = 0.3
+    ),
+
+    panel.grid.major.y = element_line(
+      color = "grey90",
+      linewidth = 0.3
+    ),
+
+    plot.caption = element_textbox_simple(
+      family = body_font,
+      hjust = 0,
+      color = "grey45",
+      size = 7.5,
+      lineheight = 1.1,
+      margin = margin(t = 12)
+    ),
+
+    plot.margin = margin(
+      15,
+      20,
+      15,
+      15
+    )
   )
- ) +
- scale_y_continuous(
-  labels = label_percent(scale = 1),
-  expand = expansion(mult = c(0.05, 0.12))
- ) +
- scale_x_continuous(
-  breaks = seq(2006, 2025, by = 4)
- )+
- 
- labs(
-  title = "La dynamique de l’emploi diffère fortement selon les régions",
-  
-  subtitle = paste0(
-   "Évolution des effectifs salariés privés par rapport ",
-   "à leur niveau de 2006."
-  ),
-  
-  x = NULL,
-  y = "Variation depuis 2006",
-  
-  caption = paste0(
-   "Base 2006 = 0 % • Données : URSSAF\n",
-   "Auteur : Ly Amadou • Outils : R, ggplot2, dplyr"
-  )
- ) +
- 
- theme_minimal(
-  base_size = 10,
-  base_family = body_font
- ) +
- 
- theme(
-  legend.position = "none",
-  
-  plot.title.position = "plot",
-  plot.caption.position = "plot",
-  
-  panel.spacing = unit(
-   1.2,
-   "lines"
-  ),
-  
-  plot.background = element_rect(
-   fill = bg_col,
-   color = NA
-  ),
-  
-  panel.background = element_rect(
-   fill = bg_col,
-   color = NA
-  ),
-  
-  plot.title = element_textbox_simple(
-   family = title_font,
-   color = ,
-   size = 18,
-   face = "bold",
-   lineheight = 1.05,
-   margin = margin(b = 8)
-  ),
-  
-  plot.subtitle = element_textbox_simple(
-   family = body_font,
-   color = "grey35",
-   size = 10,
-   lineheight = 1.2,
-   margin = margin(b = 14)
-  ),
-  
-  strip.text = element_text(
-   family = body_font,
-   face = "bold",
-   color = ,
-   size = 7.5
-  ),
-  
-  axis.title.y = element_text(
-   color = ,
-   size = 8.5,
-   margin = margin(r = 8)
-  ),
-  
-  axis.text.x = element_text(
-   color = "grey40",
-   size = 6
-  ),
-  
-  axis.text.y = element_text(
-   color = "grey40",
-   size = 6
-  ),
-  
-  panel.grid.minor = element_blank(),
-  
-  panel.grid.major.x = element_line(
-   color = "grey88",
-   linetype = "dashed",
-   linewidth = 0.3
-  ),
-  
-  panel.grid.major.y = element_line(
-   color = "grey90",
-   linewidth = 0.3
-  ),
-  
-  plot.caption = element_textbox_simple(
-   family = body_font,
-   hjust = 0,
-   color = "grey45",
-   size = 7,
-   lineheight = 1.1,
-   margin = margin(t = 12)
-  ),
-  
-  plot.margin = margin(
-   12,
-   18,
-   12,
-   12
-  )
- )
 
 gg_region_evolution
 ```
