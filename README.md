@@ -123,7 +123,7 @@ que celle de leur tissu d'établissements.
 ##  Quelles régions contribuent le plus à la croissance ?
 
 <p align="center">
-  <img src="figures/region_performance_gt.png" width="850">
+  <img src="figures/region_performance_gt.jpeg" width="850">
 </p>
 
 L'Île-de-France représente à elle seule près de **35 % de la création nette
@@ -131,17 +131,20 @@ d'emplois observée entre 2006 et 2025**.
 
 ---
 
-##  Une structure sectorielle très différenciée
+## Une structure sectorielle marquée par de fortes différences de taille
 
 <p align="center">
-  <img src="figures/gg_effectifs_secteurs.png" width="850">
+  <img src="figures/gg_taille_secteurs.png" width="850">
 </p>
 
-Le poids d'un secteur dans l'emploi dépend non seulement du nombre
-d'établissements, mais également de leur **taille moyenne**.
+La contribution d’un secteur à l’emploi salarié privé ne dépend pas uniquement du **nombre d’établissements** qui le composent, mais également de leur **taille moyenne**. Certains secteurs reposent ainsi sur un grand nombre de petites structures, tandis que d’autres concentrent les salariés au sein d’établissements de taille plus importante.
+
+Cette distinction permet de mieux comprendre les différences de structure entre secteurs et d’identifier ceux où l’emploi est davantage **fragmenté** ou, au contraire, **concentré**.
+
 
  L'analyse complète et les autres visualisations sont disponibles dans le
-**[rapport final](reports/rapport-final.pdf)**.
+**[rapport final en pdf](reports/rapport-final.pdf)**
+ou en  **[html](reports/analyse_emploi_prive_france.html)**..
 
 ---
 
